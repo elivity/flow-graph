@@ -1,0 +1,40 @@
+<idea-plugin>
+    <id>dev.flowgraph.analysisapi.prototype</id>
+    <name>Flow Graph (Analysis API Prototype)</name>
+    <vendor>Prototype</vendor>
+
+    <description><![CDATA[
+      K2 Analysis API prototype for semantic Flow/StateFlow propagation, symbolic simulation, causal side-effect tracing, and deep live runtime overlays for StateFlow, SharedFlow and cold Flow delivery.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.kotlin</depends>
+    <depends>com.intellij.java</depends>
+
+    <!-- Android Studio / IntelliJ <= 2026.1 requires plugins that depend on
+         org.jetbrains.kotlin to explicitly opt into K2 mode. The analyzer
+         uses the Kotlin Analysis API and is intended for K2. -->
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <!--suppress PluginXmlValidity -->
+        <supportsKotlinPluginMode supportsK1="false" supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Flow Graph"
+                    anchor="right"
+                    factoryClass="dev.flowgraph.ui.FlowGraphToolWindowFactory"
+                    canCloseContents="false"/>
+        <projectService serviceImplementation="dev.flowgraph.service.FlowGraphProjectService"/>
+        <projectService serviceImplementation="dev.flowgraph.service.LiveTraceService"/>
+    </extensions>
+
+    <actions>
+        <action id="FlowGraph.ShowForCaret"
+                class="dev.flowgraph.action.ShowFlowGraphAction"
+                text="Show Flow Graph"
+                description="Resolve the Flow/StateFlow at the caret with Kotlin Analysis API and visualize its propagation">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt G"/>
+        </action>
+    </actions>
+</idea-plugin>
