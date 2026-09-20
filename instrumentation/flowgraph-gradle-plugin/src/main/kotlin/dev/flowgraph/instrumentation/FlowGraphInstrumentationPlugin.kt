@@ -29,6 +29,10 @@ abstract class FlowGraphInstrumentationExtension @Inject constructor(objects: Ob
     val traceColdFlows: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
     /** Trace suspended MutableSharedFlow.emit() requests in addition to tryEmit(). */
     val traceSuspendingEmits: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
+    /** Trace source Compose function entry/recomposition boundaries. */
+    val traceCompose: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
+    /** Capture top-level Android UI input so the IDE timeline can mark user interactions. */
+    val traceUiInteractions: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
 
     /**
      * v0.11 default: instrument every eligible Flow/StateFlow/SharedFlow field in the debug APK once.
@@ -50,9 +54,23 @@ class FlowGraphInstrumentationPlugin : Plugin<Project> {
         )
 
         project.plugins.withId("com.android.application") {
-            // The included instrumentation build also contains :flowgraph-runtime. Gradle composite
-            // dependency substitution resolves this coordinate to that project automatically.
-            project.dependencies.add("debugImplementation", "dev.flowgraph:flowgraph-runtime:0.11.3")
+            // The runtime is intentionally an explicit consumer dependency. This keeps the
+            // Gradle plugin conventional and makes the app-side setup visible in build.gradle.kts:
+            // debugImplementation("com.github.elivity:flow-graph:<same version>")
+
+            project.afterEvaluate {
+                val hasRuntime = project.configurations.findByName("debugImplementation")
+                    ?.dependencies
+                    ?.any { dependency ->
+                        dependency.group == "com.github.elivity" && dependency.name == "flow-graph"
+                    } == true
+                if (!hasRuntime) {
+                    project.logger.warn(
+                        "Flow Graph: runtime dependency not found. Add " +
+                            "debugImplementation(\"com.github.elivity:flow-graph:<same version as the plugin>\")",
+                    )
+                }
+            }
 
             val androidComponents = project.extensions.getByType(ApplicationAndroidComponentsExtension::class.java)
             androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
@@ -65,7 +83,7 @@ class FlowGraphInstrumentationPlugin : Plugin<Project> {
                 val targets = if (globalMode) {
                     emptyList()
                 } else {
-                    readTargets(project.rootProject.file(".flowgraph/targets.txt"))
+                    readTargets(findBuildRoot(project.layout.projectDirectory.asFile).resolve(".flowgraph/targets.txt"))
                 }
                 variant.instrumentation.excludes.add("dev/flowgraph/runtime/**")
                 variant.instrumentation.transformClassesWith(
@@ -76,6 +94,8 @@ class FlowGraphInstrumentationPlugin : Plugin<Project> {
                     params.traceReads.set(extension.traceReads)
                     params.traceColdFlows.set(extension.traceColdFlows)
                     params.traceSuspendingEmits.set(extension.traceSuspendingEmits)
+                    params.traceCompose.set(extension.traceCompose)
+                    params.traceUiInteractions.set(extension.traceUiInteractions)
                     params.instrumentAllEligibleFlows.set(extension.instrumentAllEligibleFlows)
                     params.instrumentAllWhenTargetsMissing.set(extension.instrumentAllWhenTargetsMissing)
                 }
@@ -94,6 +114,24 @@ class FlowGraphInstrumentationPlugin : Plugin<Project> {
                 )
             }
         }
+    }
+
+    /**
+     * Locate the consumer build root without touching another Gradle Project model.
+     *
+     * Gradle isolated-projects mode rejects cross-project file lookups through the root project model.
+     * Walking the filesystem from the module directory keeps targeted compatibility mode
+     * isolated-project safe while still finding the root-level .flowgraph directory.
+     */
+    private fun findBuildRoot(startDirectory: File): File {
+        var current: File? = startDirectory
+        while (current != null) {
+            if (File(current, "settings.gradle.kts").isFile || File(current, "settings.gradle").isFile) {
+                return current
+            }
+            current = current.parentFile
+        }
+        return startDirectory
     }
 
     private fun readTargets(file: File): List<String> {
@@ -120,6 +158,12 @@ interface FlowGraphInstrumentationParameters : InstrumentationParameters {
     val traceSuspendingEmits: Property<Boolean>
 
     @get:Input
+    val traceCompose: Property<Boolean>
+
+    @get:Input
+    val traceUiInteractions: Property<Boolean>
+
+    @get:Input
     val instrumentAllEligibleFlows: Property<Boolean>
 
     @get:Input
@@ -141,6 +185,8 @@ abstract class FlowGraphClassVisitorFactory :
         traceReads = parameters.get().traceReads.get(),
         traceColdFlows = parameters.get().traceColdFlows.get(),
         traceSuspendingEmits = parameters.get().traceSuspendingEmits.get(),
+        traceCompose = parameters.get().traceCompose.get(),
+        traceUiInteractions = parameters.get().traceUiInteractions.get(),
         instrumentAllEligibleFlows = parameters.get().instrumentAllEligibleFlows.get(),
         instrumentAllWhenTargetsMissing = parameters.get().instrumentAllWhenTargetsMissing.get(),
     )
@@ -152,11 +198,14 @@ private class FlowGraphClassVisitor(
     private val traceReads: Boolean,
     private val traceColdFlows: Boolean,
     private val traceSuspendingEmits: Boolean,
+    private val traceCompose: Boolean,
+    private val traceUiInteractions: Boolean,
     private val instrumentAllEligibleFlows: Boolean,
     private val instrumentAllWhenTargetsMissing: Boolean,
 ) : ClassVisitor(Opcodes.ASM9, delegate) {
 
     private var classInternalName: String = "<unknown>"
+    private var sourceFileName: String? = null
 
     override fun visit(
         version: Int,
@@ -170,6 +219,11 @@ private class FlowGraphClassVisitor(
         super.visit(version, access, name, signature, superName, interfaces)
     }
 
+    override fun visitSource(source: String?, debug: String?) {
+        sourceFileName = source
+        super.visitSource(source, debug)
+    }
+
     override fun visitMethod(
         access: Int,
         name: String,
@@ -180,7 +234,7 @@ private class FlowGraphClassVisitor(
         val base = super.visitMethod(access, name, descriptor, signature, exceptions)
         return FlowGraphMethodVisitor(
             methodVisitor = base,
-            access = access,
+            methodAccess = access,
             methodName = name,
             methodDescriptor = descriptor,
             classInternalName = classInternalName,
@@ -188,6 +242,9 @@ private class FlowGraphClassVisitor(
             traceReads = traceReads,
             traceColdFlows = traceColdFlows,
             traceSuspendingEmits = traceSuspendingEmits,
+            traceCompose = traceCompose,
+            traceUiInteractions = traceUiInteractions,
+            sourceFileName = sourceFileName,
             instrumentAllEligibleFlows = instrumentAllEligibleFlows,
             instrumentAllWhenTargetsMissing = instrumentAllWhenTargetsMissing,
         )
@@ -196,7 +253,7 @@ private class FlowGraphClassVisitor(
 
 private class FlowGraphMethodVisitor(
     methodVisitor: MethodVisitor,
-    access: Int,
+    private val methodAccess: Int,
     private val methodName: String,
     private val methodDescriptor: String,
     private val classInternalName: String,
@@ -204,11 +261,35 @@ private class FlowGraphMethodVisitor(
     private val traceReads: Boolean,
     private val traceColdFlows: Boolean,
     private val traceSuspendingEmits: Boolean,
+    private val traceCompose: Boolean,
+    private val traceUiInteractions: Boolean,
+    private val sourceFileName: String?,
     private val instrumentAllEligibleFlows: Boolean,
     private val instrumentAllWhenTargetsMissing: Boolean,
-) : GeneratorAdapter(Opcodes.ASM9, methodVisitor, access, methodName, methodDescriptor) {
+) : GeneratorAdapter(Opcodes.ASM9, methodVisitor, methodAccess, methodName, methodDescriptor) {
 
     private var currentLine: Int = -1
+    /** Inject the live-composition registration once, at this composable function\'s outer group. */
+    private var composeInspectionInjected: Boolean = false
+    /** True when this source composable's generated body took Composer.skipToGroupEnd(). */
+    private var composeSkippedLocal: Int = -1
+
+    override fun visitCode() {
+        super.visitCode()
+        if (traceCompose && isSourceComposableMethod()) {
+            // A generated @Composable JVM method can be *entered* because its parent recomposed and
+            // still have its source body skipped by Composer.skipToGroupEnd(). Counting method entry
+            // therefore wildly over-reports recomposition activity. Track the compiler's skip path
+            // and emit only when this invocation actually executed the composable body.
+            composeSkippedLocal = newLocal(Type.BOOLEAN_TYPE)
+            push(false)
+            storeLocal(composeSkippedLocal)
+
+            // Do NOT register CompositionData here. visitCode() runs before the Compose compiler's
+            // startRestartGroup/startReplaceGroup call, so the current slot-table group is still
+            // the caller/parent. Registration is done after the function's outer group starts.
+        }
+    }
 
     override fun visitLineNumber(line: Int, start: Label) {
         currentLine = line
@@ -268,7 +349,82 @@ private class FlowGraphMethodVisitor(
     ) {
         val site = site()
 
+        // Compose's compiler-generated skipToGroupEnd() is the authoritative signal that this
+        // invocation did not execute the source composable body. Mark it before forwarding the
+        // original call; visitInsn() emits the runtime event only for non-skipped invocations.
+        if (
+            traceCompose &&
+            composeSkippedLocal >= 0 &&
+            owner == "androidx/compose/runtime/Composer" &&
+            name == "skipToGroupEnd" &&
+            descriptor == "()V"
+        ) {
+            push(true)
+            storeLocal(composeSkippedLocal)
+            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+            return
+        }
+
+        if (
+            traceCompose &&
+            !composeInspectionInjected &&
+            isSourceComposableMethod() &&
+            isComposeFunctionGroupStart(owner, name, descriptor)
+        ) {
+            instrumentComposeFunctionGroupStart(
+                opcode = opcode,
+                owner = owner,
+                name = name,
+                descriptor = descriptor,
+                isInterface = isInterface,
+                site = site,
+            )
+            composeInspectionInjected = true
+            return
+        }
+
         if (traceReads && name == "getValue" && descriptor == "()Ljava/lang/Object;" && isFlowOwner(owner)) {
+            dup()
+            push(site)
+            invokeRuntime("recordRead", "(Ljava/lang/Object;Ljava/lang/String;)V")
+            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+            return
+        }
+
+        // Kotlin delegated Compose state (`var value by remember { mutableStateOf(...) }`) normally
+        // calls static operator helpers in SnapshotStateKt rather than invoking MutableState.getValue /
+        // setValue directly from app bytecode. Those helpers live in the Compose runtime library, so
+        // project-only instrumentation never sees the inner interface access. Trace the state object
+        // at the call site before forwarding to the helper.
+        if (traceReads && opcode == Opcodes.INVOKESTATIC && isComposeDelegatedStateRead(owner, name, descriptor)) {
+            instrumentComposeDelegatedRead(
+                opcode = opcode,
+                owner = owner,
+                name = name,
+                descriptor = descriptor,
+                isInterface = isInterface,
+                site = site,
+            )
+            return
+        }
+
+        if (opcode == Opcodes.INVOKESTATIC && isComposeDelegatedStateWrite(owner, name, descriptor)) {
+            instrumentComposeDelegatedWrite(
+                opcode = opcode,
+                owner = owner,
+                name = name,
+                descriptor = descriptor,
+                isInterface = isInterface,
+                site = site,
+            )
+            return
+        }
+
+        // Compose runtime has both generic State/MutableState accessors and specialized primitive
+        // accessors (IntState, LongState, FloatState, DoubleState). It can also devirtualize calls to
+        // concrete Snapshot* implementations, so matching only the two public interfaces misses a
+        // large fraction of real Compose state activity.
+        if (traceReads && isComposeStateReadAccessor(owner, name, descriptor)) {
             dup()
             push(site)
             invokeRuntime("recordRead", "(Ljava/lang/Object;Ljava/lang/String;)V")
@@ -290,6 +446,26 @@ private class FlowGraphMethodVisitor(
             super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
             loadLocal(flowLocal)
             push("setValue")
+            push(site)
+            invokeRuntime("afterWrite", "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")
+            return
+        }
+
+        if (isComposeStateWriteAccessor(owner, name, descriptor)) {
+            val argumentType = Type.getArgumentTypes(descriptor).single()
+            val valueLocal = newLocal(argumentType)
+            val stateLocal = newLocal(Type.getType(Object::class.java))
+            storeLocal(valueLocal)
+            storeLocal(stateLocal)
+            loadLocal(stateLocal)
+            push(name)
+            push(site)
+            invokeRuntime("beforeWrite", "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")
+            loadLocal(stateLocal)
+            loadLocal(valueLocal)
+            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+            loadLocal(stateLocal)
+            push(name)
             push(site)
             invokeRuntime("afterWrite", "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")
             return
@@ -430,6 +606,17 @@ private class FlowGraphMethodVisitor(
             return
         }
 
+        // Local/delegated Compose MutableState often has no State-typed JVM field. Register the
+        // object at its factory/call site so live setValue/getValue events can still map back to the
+        // source property by line number.
+        if (traceCompose && isComposeStateReturnType(descriptor)) {
+            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+            dup()
+            push(dynamicComposeStateKey(name))
+            invokeRuntime("registerFlow", "(Ljava/lang/Object;Ljava/lang/String;)V")
+            return
+        }
+
         // Register returned Flow objects at the call site too. This gives intermediate cold-flow
         // operators (including locals that are never stored in a field) a synthetic runtime identity.
         // The IDE maps @flowop keys back to operator/collector nodes by source line + operator name.
@@ -451,6 +638,28 @@ private class FlowGraphMethodVisitor(
         // itself is valid. AGP recomputes frames for every instrumented method.
         val isExit = opcode in Opcodes.IRETURN..Opcodes.RETURN || opcode == Opcodes.ATHROW
         if (isExit) {
+            // Install one Window.Callback wrapper after Activity-style onCreate(Bundle) completes.
+            // We intentionally do not require a compile-time Android dependency here: the runtime
+            // verifies `this` reflectively and is a no-op for unrelated onCreate(Bundle) methods.
+            // This captures real top-level touch/key/scroll input for the profiler timeline without
+            // changing application event dispatch semantics.
+            if (opcode == Opcodes.RETURN && traceUiInteractions && isActivityOnCreateSignature()) {
+                loadThis()
+                invokeRuntime("installUiInteractionCapture", "(Ljava/lang/Object;)V")
+            }
+
+            // Report actual source-body execution, not raw JVM method entry. Parent recomposition can
+            // invoke a child composable method only for the child to immediately skip its group;
+            // those invocations must not look like child recompositions in Flow Graph.
+            if (opcode != Opcodes.ATHROW && traceCompose && composeSkippedLocal >= 0) {
+                val skipped = newLabel()
+                loadLocal(composeSkippedLocal)
+                ifZCmp(NE, skipped)
+                push(composeRuntimeKey())
+                push("compose-body:${sourceFileName ?: classInternalName}:$methodName")
+                invokeRuntime("recordCompose", "(Ljava/lang/String;Ljava/lang/String;)V")
+                mark(skipped)
+            }
             // Flow-valued computed/delegated Kotlin properties have no Flow-typed backing field.
             // ARETURN already has the returned Flow on the real JVM stack. DUP leaves one copy for
             // ARETURN and feeds the other copy to registerFlow().
@@ -475,6 +684,112 @@ private class FlowGraphMethodVisitor(
             }
         }
         super.visitInsn(opcode)
+    }
+
+    private fun isComposeFunctionGroupStart(owner: String, name: String, descriptor: String): Boolean {
+        if (owner != "androidx/compose/runtime/Composer") return false
+        val args = Type.getArgumentTypes(descriptor)
+        if (args.isEmpty() || args[0] != Type.INT_TYPE) return false
+        return when (name) {
+            "startRestartGroup" ->
+                Type.getReturnType(descriptor).internalName == "androidx/compose/runtime/Composer"
+            "startReplaceGroup", "startReplaceableGroup" ->
+                Type.getReturnType(descriptor) == Type.VOID_TYPE
+            else -> false
+        }
+    }
+
+    /**
+     * Capture the compiler-generated group key without guessing it from bytecode constants.
+     *
+     * At an instance Composer call the operand stack is:
+     *   ..., composer, key [, sourceInformation]
+     *
+     * We temporarily spill the arguments, execute the original group-start call unchanged, then
+     * register the exact key together with CompositionData. For restart groups we also spill and
+     * restore the returned Composer so the transformed bytecode has exactly the original stack.
+     */
+    private fun instrumentComposeFunctionGroupStart(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+        isInterface: Boolean,
+        site: String,
+    ) {
+        val args = Type.getArgumentTypes(descriptor)
+        val sourceInfoArg = args.getOrNull(1)?.takeIf {
+            it.sort == Type.OBJECT && it.internalName == "java/lang/String"
+        }
+
+        val sourceInfoLocal = if (sourceInfoArg != null) newLocal(sourceInfoArg) else -1
+        if (sourceInfoLocal >= 0) storeLocal(sourceInfoLocal)
+
+        val keyLocal = newLocal(Type.INT_TYPE)
+        storeLocal(keyLocal)
+
+        // The receiver Composer remains on the operand stack.
+        loadLocal(keyLocal)
+        if (sourceInfoLocal >= 0) loadLocal(sourceInfoLocal)
+        super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+
+        val returnType = Type.getReturnType(descriptor)
+        val composerForRuntimeLocal: Int
+        if (returnType.sort == Type.OBJECT &&
+            returnType.internalName == "androidx/compose/runtime/Composer"
+        ) {
+            composerForRuntimeLocal = newLocal(returnType)
+            storeLocal(composerForRuntimeLocal)
+        } else {
+            val composerArg = composerArgumentIndex()
+            if (composerArg < 0) return
+            composerForRuntimeLocal = newLocal(Type.getObjectType("androidx/compose/runtime/Composer"))
+            loadArg(composerArg)
+            storeLocal(composerForRuntimeLocal)
+        }
+
+        push(composeRuntimeKey())
+        loadLocal(composerForRuntimeLocal)
+        push("compose-group:${sourceFileName ?: classInternalName}:$methodName@$site")
+        loadLocal(keyLocal)
+        invokeRuntime(
+            "recordComposeInspection",
+            "(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/String;I)V",
+        )
+
+        // Restore the original restart-group return value for the compiler-generated ASTORE.
+        if (returnType.sort == Type.OBJECT) {
+            loadLocal(composerForRuntimeLocal)
+        }
+    }
+
+    private fun isActivityOnCreateSignature(): Boolean =
+        methodName == "onCreate" &&
+            methodDescriptor == "(Landroid/os/Bundle;)V" &&
+            (methodAccess and Opcodes.ACC_STATIC) == 0
+
+    private fun isSourceComposableMethod(): Boolean {
+        if (methodName == "<init>" || methodName == "<clinit>" || methodName == "invoke" || methodName == "invokeSuspend") return false
+        if (methodName.startsWith("access$") || methodName.startsWith("$")) return false
+        if (classInternalName.startsWith("androidx/") || classInternalName.startsWith("kotlin/") ||
+            classInternalName.startsWith("kotlinx/") || classInternalName.startsWith("java/") ||
+            classInternalName.startsWith("javax/") || classInternalName.startsWith("dev/flowgraph/runtime/")) return false
+        return Type.getArgumentTypes(methodDescriptor).any { arg ->
+            arg.sort == Type.OBJECT && arg.internalName == "androidx/compose/runtime/Composer"
+        }
+    }
+
+
+    private fun composerArgumentIndex(): Int =
+        Type.getArgumentTypes(methodDescriptor).indexOfFirst { arg ->
+            arg.sort == Type.OBJECT && arg.internalName == "androidx/compose/runtime/Composer"
+        }
+
+    private fun composeRuntimeKey(): String {
+        val packageName = classInternalName.substringBeforeLast('/', "").replace('/', '.')
+        val fileName = sourceFileName ?: (classInternalName.substringAfterLast('/').substringBefore('$').removeSuffix("Kt") + ".kt")
+        val sourceName = methodName.substringBefore('-')
+        return "@compose|$packageName|$fileName|$sourceName"
     }
 
     private fun invokeRuntime(name: String, descriptor: String) {
@@ -526,6 +841,31 @@ private class FlowGraphMethodVisitor(
     private fun dynamicFlowKey(callName: String): String =
         "@flowop|${classInternalName.replace('/', '.')}|$currentLine|$callName"
 
+    /**
+     * Runtime identity for a source Compose-State factory call.
+     *
+     * Source file + line + factory alone is not sufficient with Kotlin inline/composable lowering:
+     * synthetic/inlined code can inherit the caller's line table and make an unrelated MutableState
+     * look as if it came from the same source declaration. Keep the source function and bytecode owner
+     * in the wire key. The IDE uses the source function as part of the exact match and keeps the owner
+     * as diagnostic provenance.
+     */
+    private fun dynamicComposeStateKey(callName: String): String =
+        "@composestate2|${sourceFileName.orEmpty()}|$currentLine|$callName|${composeSourceFunctionName()}|${classInternalName.replace('/', '.')}"
+
+    private fun composeSourceFunctionName(): String {
+        if (methodName != "invoke" && methodName != "invokeSuspend") return methodName
+
+        // Kotlin-generated lambda/coroutine classes normally encode the enclosing source function:
+        //   AppScrollbarsKt$scrollbarThumbColor$1.invokeSuspend
+        // Recover that name so it still matches the PSI source declaration.
+        val parts = classInternalName.substringAfterLast('/').split('$').drop(1)
+        return parts.asReversed().firstOrNull { part ->
+            part.isNotBlank() && !part.all { it.isDigit() } &&
+                part !in setOf("Companion", "DefaultImpls")
+        } ?: methodName
+    }
+
     private fun getterPropertyName(getter: String): String {
         val raw = getter.removePrefix("get")
         if (raw.isEmpty()) return getter
@@ -533,9 +873,13 @@ private class FlowGraphMethodVisitor(
     }
 
     private fun isFlowReturnType(descriptor: String): Boolean =
-        Type.getReturnType(descriptor).descriptor in TRACEABLE_FLOW_DESCRIPTORS
+        Type.getReturnType(descriptor).descriptor in FLOW_DESCRIPTORS
 
-    private fun isTraceableFlowDescriptor(descriptor: String): Boolean = descriptor in TRACEABLE_FLOW_DESCRIPTORS
+    private fun isComposeStateReturnType(descriptor: String): Boolean =
+        Type.getReturnType(descriptor).descriptor in COMPOSE_STATE_DESCRIPTORS
+
+    private fun isTraceableFlowDescriptor(descriptor: String): Boolean =
+        descriptor in FLOW_DESCRIPTORS || descriptor in COMPOSE_STATE_DESCRIPTORS
 
     private fun isFlowOwner(owner: String): Boolean = owner.startsWith("kotlinx/coroutines/flow/") &&
         (owner.contains("StateFlow") || owner.contains("SharedFlow"))
@@ -550,6 +894,138 @@ private class FlowGraphMethodVisitor(
         owner == "kotlinx/coroutines/flow/FlowCollector" ||
             owner.startsWith("kotlinx/coroutines/flow/") && owner.contains("Collector")
 
+    private fun instrumentComposeDelegatedRead(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+        isInterface: Boolean,
+        site: String,
+    ) {
+        val argumentTypes = Type.getArgumentTypes(descriptor)
+        val locals = IntArray(argumentTypes.size)
+        for (index in argumentTypes.indices.reversed()) {
+            locals[index] = newLocal(argumentTypes[index])
+            storeLocal(locals[index])
+        }
+
+        // Do not fall back to a broad source-property identity. A local name such as `state` is
+        // extremely common inside inlined Compose/library code. The exact source access line plus
+        // read/write kind is what lets the IDE prove that this runtime delegate belongs to the PSI
+        // property it is displaying.
+        delegatedPropertyArgumentIndex(argumentTypes)?.let { propertyIndex ->
+            loadLocal(locals[0])
+            loadLocal(locals[propertyIndex])
+            push(sourceFileName.orEmpty())
+            push(composeSourceFunctionName())
+            push(currentLine)
+            push(site)
+            invokeRuntime(
+                "recordComposeDelegatedRead",
+                "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V",
+            )
+        }
+
+        for (index in argumentTypes.indices) loadLocal(locals[index])
+        super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+    }
+
+    private fun instrumentComposeDelegatedWrite(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+        isInterface: Boolean,
+        site: String,
+    ) {
+        val argumentTypes = Type.getArgumentTypes(descriptor)
+        val locals = IntArray(argumentTypes.size)
+        for (index in argumentTypes.indices.reversed()) {
+            locals[index] = newLocal(argumentTypes[index])
+            storeLocal(locals[index])
+        }
+
+        val propertyIndex = delegatedPropertyArgumentIndex(argumentTypes)
+        if (propertyIndex != null) {
+            loadLocal(locals[0])
+            loadLocal(locals[propertyIndex])
+            push(sourceFileName.orEmpty())
+            push(composeSourceFunctionName())
+            push(currentLine)
+            push(site)
+            invokeRuntime(
+                "beforeComposeDelegatedWrite",
+                "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V",
+            )
+        }
+
+        for (index in argumentTypes.indices) loadLocal(locals[index])
+        super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+
+        if (propertyIndex != null) {
+            loadLocal(locals[0])
+            loadLocal(locals[propertyIndex])
+            push(sourceFileName.orEmpty())
+            push(composeSourceFunctionName())
+            push(currentLine)
+            push(site)
+            invokeRuntime(
+                "afterComposeDelegatedWrite",
+                "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V",
+            )
+        }
+    }
+
+    private fun delegatedPropertyArgumentIndex(argumentTypes: Array<Type>): Int? =
+        argumentTypes.indexOfFirst { type ->
+            type.sort == Type.OBJECT &&
+                (type.internalName == "kotlin/reflect/KProperty" ||
+                    type.internalName.startsWith("kotlin/reflect/KProperty"))
+        }.takeIf { it >= 0 }
+
+    private fun isComposeDelegatedStateRead(owner: String, name: String, descriptor: String): Boolean {
+        if (!owner.startsWith("androidx/compose/runtime/") || name != "getValue") return false
+        val args = Type.getArgumentTypes(descriptor)
+        if (args.size < 2 || args[0].descriptor !in COMPOSE_STATE_DESCRIPTORS) return false
+        return Type.getReturnType(descriptor) != Type.VOID_TYPE
+    }
+
+    private fun isComposeDelegatedStateWrite(owner: String, name: String, descriptor: String): Boolean {
+        if (!owner.startsWith("androidx/compose/runtime/") || name != "setValue") return false
+        val args = Type.getArgumentTypes(descriptor)
+        if (args.size < 2 || args[0].descriptor !in COMPOSE_STATE_DESCRIPTORS) return false
+        return Type.getReturnType(descriptor) == Type.VOID_TYPE
+    }
+
+    private fun isComposeRuntimeStateOwner(owner: String): Boolean =
+        owner.startsWith("androidx/compose/runtime/") &&
+            (owner.contains("State") || owner.contains("Snapshot"))
+
+    private fun isComposeStateReadAccessor(owner: String, name: String, descriptor: String): Boolean {
+        if (!isComposeRuntimeStateOwner(owner) || Type.getArgumentTypes(descriptor).isNotEmpty()) return false
+        return when (name) {
+            "getValue" -> descriptor == "()Ljava/lang/Object;"
+            "getIntValue" -> descriptor == "()I"
+            "getLongValue" -> descriptor == "()J"
+            "getFloatValue" -> descriptor == "()F"
+            "getDoubleValue" -> descriptor == "()D"
+            else -> false
+        }
+    }
+
+    private fun isComposeStateWriteAccessor(owner: String, name: String, descriptor: String): Boolean {
+        if (!isComposeRuntimeStateOwner(owner) || Type.getReturnType(descriptor) != Type.VOID_TYPE) return false
+        if (Type.getArgumentTypes(descriptor).size != 1) return false
+        return when (name) {
+            "setValue" -> descriptor == "(Ljava/lang/Object;)V"
+            "setIntValue" -> descriptor == "(I)V"
+            "setLongValue" -> descriptor == "(J)V"
+            "setFloatValue" -> descriptor == "(F)V"
+            "setDoubleValue" -> descriptor == "(D)V"
+            else -> false
+        }
+    }
+
     companion object {
         private const val RUNTIME_INTERNAL_NAME = "dev/flowgraph/runtime/FlowGraphAutoRuntime"
         private const val FLOW_COLLECT_DESCRIPTOR =
@@ -557,12 +1033,24 @@ private class FlowGraphMethodVisitor(
         private const val FLOW_COLLECTOR_EMIT_DESCRIPTOR =
             "(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
         private const val SUSPENDING_EMIT_DESCRIPTOR = FLOW_COLLECTOR_EMIT_DESCRIPTOR
-        private val TRACEABLE_FLOW_DESCRIPTORS = setOf(
+        private val FLOW_DESCRIPTORS = setOf(
             "Lkotlinx/coroutines/flow/Flow;",
             "Lkotlinx/coroutines/flow/StateFlow;",
             "Lkotlinx/coroutines/flow/MutableStateFlow;",
             "Lkotlinx/coroutines/flow/SharedFlow;",
             "Lkotlinx/coroutines/flow/MutableSharedFlow;",
+        )
+        private val COMPOSE_STATE_DESCRIPTORS = setOf(
+            "Landroidx/compose/runtime/State;",
+            "Landroidx/compose/runtime/MutableState;",
+            "Landroidx/compose/runtime/IntState;",
+            "Landroidx/compose/runtime/MutableIntState;",
+            "Landroidx/compose/runtime/LongState;",
+            "Landroidx/compose/runtime/MutableLongState;",
+            "Landroidx/compose/runtime/FloatState;",
+            "Landroidx/compose/runtime/MutableFloatState;",
+            "Landroidx/compose/runtime/DoubleState;",
+            "Landroidx/compose/runtime/MutableDoubleState;",
         )
     }
 }

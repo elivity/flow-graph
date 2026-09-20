@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dev.flowgraph"
-version = "0.14.2"
+version = providers.gradleProperty("flowGraphVersion").get()
 
 repositories {
     mavenCentral()
@@ -15,32 +15,32 @@ dependencies {
     testImplementation(kotlin("test"))
 
     intellijPlatform {
-        // Target the same Android Studio platform as AI-253.32098.37
-        // (Panda 4 / 2025.3.4). This is intentional: the Kotlin Analysis API
-        // is supplied by Android Studio's bundled Kotlin plugin and must match
-        // the IDE generation where the plugin will actually run.
+        // Android Studio Panda / 253 platform used by the current plugin.
         androidStudio("2025.3.4.7")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.java")
     }
 }
 
-// IntelliJ Platform 2025.3 / Android Studio Panda uses Java 21.
 kotlin {
     jvmToolchain(21)
 }
 
 intellijPlatform {
     pluginConfiguration {
-        name = "Flow Graph (Analysis API Prototype)"
+        name = "Flow Graph"
         version = project.version.toString()
         ideaVersion {
-            // The user's IDE is AI-253.32098.37. Do not advertise support for
-            // earlier 253 builds because we compile against the 253.32098 API.
             sinceBuild = "253.32098"
             untilBuild = "261.*"
         }
-        description = "K2 Analysis API Flow/StateFlow impact graph with symbolic simulation plus deep debug runtime tracing for StateFlow, SharedFlow, cold Flow collection and live overlays."
-        vendor { name = "Prototype" }
+        description = "K2 Analysis API Flow/StateFlow impact graph with Compose propagation, live runtime tracing, UI interaction markers, timeline scrubbing, and live Compose inspection."
+        vendor { name = "Flow Graph" }
+    }
+
+    // After the first Marketplace upload, releases can be published with:
+    //   ./gradlew publishPlugin -PintellijPlatformPublishingToken=...
+    publishing {
+        token = providers.gradleProperty("intellijPlatformPublishingToken")
     }
 }

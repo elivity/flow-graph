@@ -1,0 +1,13 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.platform.scriptDebugger.protocolReaderRuntime" revision="AI-253.32098.37.2534.15336583" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.platform.scriptDebugger.protocolReaderRuntime" ext="jar" conf="default" url="lib/modules" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledModule" name="intellij.platform.backend" rev="AI-253.32098.37.2534.15336583" />
+  </dependencies>
+</ivy-module>

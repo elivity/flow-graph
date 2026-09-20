@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+      - name: Build and test Android Studio plugin
+        run: gradle clean test buildPlugin
+      - name: Build runtime and Gradle instrumentation plugin
+        run: gradle -p instrumentation clean build
+      - name: Verify JitPack runtime publication
+        run: >-
+          gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal
+          -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion=0.18.4
+      - name: Validate Gradle Plugin Portal metadata
+        run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only

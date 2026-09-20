@@ -1,0 +1,36 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.platform.coverage" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.platform.coverage" ext="jar" conf="default" url="lib" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledModule" name="intellij.libraries.fastutil" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.coverage.agent" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.diff" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.editor.ex" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.editor.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.execution" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.execution.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.ide" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.ide.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.ide.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lang" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lang.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lvcs" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.projectModel" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.statistics" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.testRunner" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.usageView" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.diff" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.vcs" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>

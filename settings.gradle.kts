@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "flow-graph-analysis-api-prototype"
+rootProject.name = "flow-graph"

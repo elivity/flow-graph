@@ -1,0 +1,46 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.xml.impl" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.xml.impl" ext="jar" conf="default" url="lib" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledModule" name="intellij.libraries.aalto.xml" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.fastutil" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.kotlinx.collections.immutable" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.xerces" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.backend" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.builtInServer" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.codeStyle" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.diff" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.editor.ex" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.editor.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.execution.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.ide.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.ide.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.indexing" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lang" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lang.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.lang.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.projectModel" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.usageView" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.diff" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.vcs" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.analysis.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.dom" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.parser" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.psi" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.psi.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.syntax" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.xml.ui.common" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>

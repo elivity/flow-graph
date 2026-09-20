@@ -7,6 +7,10 @@ data class RuntimeTraceEvent(
     val valueSummary: String?,
     val site: String?,
     val fields: Set<String> = emptySet(),
+    /** Number of source events represented by this transport sample after runtime coalescing. */
+    val occurrences: Int = 1,
+    /** Runtime identity for repeated/keyed Compose State objects sharing one source node. */
+    val instanceId: Int? = null,
     /** IDE receipt wall-clock time. Device monotonic timestamps cannot be compared to host time. */
     val receivedAtMillis: Long = System.currentTimeMillis(),
 )
@@ -19,8 +23,10 @@ data class RuntimeObservedEdge(
 )
 
 data class RuntimeOverlay(
-    /** Confirmed source emissions/writes (StateFlow set/update, SharedFlow tryEmit/immediate emit). */
+    /** Confirmed Flow/SharedFlow emissions and @Composable recompositions. */
     val nodeCounts: Map<String, Int> = emptyMap(),
+    /** Confirmed Compose State value changes. Kept separate so reads are never mislabeled as emits. */
+    val changeCounts: Map<String, Int> = emptyMap(),
     val readCounts: Map<String, Int> = emptyMap(),
     /** Cold/hot Flow values actually delivered across a bound FlowCollector boundary. */
     val deliveryCounts: Map<String, Int> = emptyMap(),
@@ -30,6 +36,8 @@ data class RuntimeOverlay(
     val emitRequestCounts: Map<String, Int> = emptyMap(),
     val edgeCounts: Map<Pair<String, String>, Int> = emptyMap(),
     val lastEventByNode: Map<String, RuntimeTraceEvent> = emptyMap(),
+    /** Latest value-bearing event for each observed Compose State runtime instance. */
+    val composeInstanceEventsByNode: Map<String, Map<Int, RuntimeTraceEvent>> = emptyMap(),
     /** IDE-receipt wall-clock time used only for transient live-activity highlighting. */
     val lastActivityAtMillis: Map<String, Long> = emptyMap(),
     val lastNodeId: String? = null,

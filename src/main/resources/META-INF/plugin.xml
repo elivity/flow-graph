@@ -1,10 +1,10 @@
 <idea-plugin>
     <id>dev.flowgraph.analysisapi.prototype</id>
-    <name>Flow Graph (Analysis API Prototype)</name>
-    <vendor>Prototype</vendor>
+    <name>Flow Graph</name>
+    <vendor>Flow Graph</vendor>
 
     <description><![CDATA[
-      K2 Analysis API prototype for semantic Flow/StateFlow propagation, symbolic simulation, causal side-effect tracing, and deep live runtime overlays for StateFlow, SharedFlow and cold Flow delivery.
+      Visualize Kotlin Flow/StateFlow/SharedFlow and Compose state propagation with K2 Analysis API, live runtime tracing, Compose inspection, UI-interaction markers, and a scrub-able execution timeline.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -26,6 +26,7 @@
                     canCloseContents="false"/>
         <projectService serviceImplementation="dev.flowgraph.service.FlowGraphProjectService"/>
         <projectService serviceImplementation="dev.flowgraph.service.LiveTraceService"/>
+        <projectService serviceImplementation="dev.flowgraph.service.ComposeRenderService"/>
     </extensions>
 
     <actions>

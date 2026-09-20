@@ -1,0 +1,26 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.platform.projectModel.impl" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.platform.projectModel.impl" ext="jar" conf="default" url="lib" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledModule" name="intellij.libraries.fastutil" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.guava" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.hash4j" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.kotlinx.coroutines.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.kryo5" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.opentelemetry" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.libraries.opentelemetry.semconv" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.core.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.diagnostic.telemetry" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.projectModel" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.coroutines" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.util.ex" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>

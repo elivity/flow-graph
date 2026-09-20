@@ -1,0 +1,45 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledPlugin" module="org.jetbrains.kotlin" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="kotlin-gradle-tooling" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.parcelize-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="intellij.kotlin.jvm.debugger.coroutines" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlin-compiler-ir" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.compose-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="intellij.kotlin.jvm.debugger.base.util" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlin-base-jps" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.scripting-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="intellij.kotlin.base.resources" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.allopen-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="javax-inject" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="intellij.kotlin.codeInsight.shared" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlin-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.lombok-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.sam-with-receiver-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="vavr" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlinx-serialization-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlin-jps-common" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.js-plain-objects-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlin-plugin-shared" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.assignment-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlin-compiler-common" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.noarg-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlin-compiler-fe10" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="kotlinc.kotlin-dataframe-compiler-plugin" ext="jar" conf="default" url="plugins/Kotlin/lib" />
+    <artifact name="intellij.kotlin.analysis.platform" ext="jar" conf="default" url="plugins/Kotlin/lib/modules" />
+    <artifact name="intellij.kotlin.completion.ml" ext="jar" conf="default" url="plugins/Kotlin/lib/modules" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledPlugin" name="org.jetbrains.kotlin" rev="IU-262.8665.337" />
+    <dependency org="bundledPlugin" name="com.intellij.java" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.backend" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.collaborationTools" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.scriptDebugger.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.debugger.impl.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.structureView.backend" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>

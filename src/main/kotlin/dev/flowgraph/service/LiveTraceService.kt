@@ -3,6 +3,7 @@ package dev.flowgraph.service
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import dev.flowgraph.model.RuntimeTraceEvent
+import java.io.BufferedWriter
 import java.net.ServerSocket
 import java.net.SocketException
 import java.nio.charset.StandardCharsets
@@ -22,6 +23,8 @@ data class LiveTraceStatus(
     val totalConnections: Long = 0,
     val validEvents: Long = 0,
     val malformedLines: Long = 0,
+    /** Valid profiler samples discarded because they cannot map to the currently loaded graph. */
+    val filteredProfilerEvents: Long = 0,
     val recordingPaused: Boolean = false,
     val ignoredWhilePaused: Long = 0,
     val lastClient: String? = null,
@@ -33,8 +36,11 @@ class LiveTraceService : Disposable {
     private val running = AtomicBoolean(false)
     private val listeners = CopyOnWriteArrayList<(RuntimeTraceEvent) -> Unit>()
     private val statusListeners = CopyOnWriteArrayList<(LiveTraceStatus) -> Unit>()
+    private val commandWriters = CopyOnWriteArrayList<BufferedWriter>()
     private val historyLock = Any()
     private val recentEvents = ArrayDeque<RuntimeTraceEvent>()
+    private val composeRenderResponses = java.util.concurrent.ConcurrentHashMap<String, RuntimeTraceEvent>()
+    @Volatile private var currentComposeResponse: RuntimeTraceEvent? = null
     private val executor = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "FlowGraph-LiveTrace").apply { isDaemon = true }
     }
@@ -43,7 +49,16 @@ class LiveTraceService : Disposable {
     private val totalConnections = AtomicLong(0)
     private val validEvents = AtomicLong(0)
     private val malformedLines = AtomicLong(0)
+    private val filteredProfilerEvents = AtomicLong(0)
     private val recordingPaused = AtomicBoolean(false)
+
+    /**
+     * Optional admission filter for profiler history/listeners. Compose render-control responses
+     * bypass it. The Flow Graph panel installs a graph-specific filter so globally instrumented
+     * framework/other-screen traffic never reaches the EDT or the scrub timeline.
+     */
+    @Volatile
+    private var profilerEventFilter: ((RuntimeTraceEvent) -> Boolean)? = null
     private val ignoredWhilePaused = AtomicLong(0)
 
     @Volatile private var server: ServerSocket? = null
@@ -59,6 +74,7 @@ class LiveTraceService : Disposable {
         totalConnections = totalConnections.get(),
         validEvents = validEvents.get(),
         malformedLines = malformedLines.get(),
+        filteredProfilerEvents = filteredProfilerEvents.get(),
         recordingPaused = recordingPaused.get(),
         ignoredWhilePaused = ignoredWhilePaused.get(),
         lastClient = lastClient,
@@ -85,8 +101,11 @@ class LiveTraceService : Disposable {
                     publishStatus()
 
                     executor.submit {
+                        var commandWriter: BufferedWriter? = null
                         try {
                             client.use { connection ->
+                                commandWriter = connection.getOutputStream().bufferedWriter(StandardCharsets.UTF_8)
+                                commandWriters += commandWriter!!
                                 connection.getInputStream().bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
                                     lines.forEach { line ->
                                         val event = parse(line)
@@ -96,17 +115,36 @@ class LiveTraceService : Disposable {
                                             if (malformed == 1L || malformed % STATUS_PUBLISH_EVERY == 0L) publishStatus()
                                         } else {
                                             val valid = validEvents.incrementAndGet()
-                                            if (recordingPaused.get()) {
+                                            val composeControlEvent = event.kind in setOf(
+                                                "compose-image",
+                                                "compose-image-error",
+                                                "compose-current",
+                                                "compose-current-error",
+                                            )
+                                            if (recordingPaused.get() && !composeControlEvent) {
                                                 val ignored = ignoredWhilePaused.incrementAndGet()
                                                 // Keep draining the socket so instrumentation never blocks the app,
-                                                // but deliberately do not retain or publish events while the user
-                                                // is inspecting a frozen profiler history.
+                                                // but deliberately do not retain profiler events while frozen.
                                                 if (ignored == 1L || ignored % STATUS_PUBLISH_EVERY == 0L) publishStatus()
+                                            } else if (!composeControlEvent && !acceptProfilerEvent(event)) {
+                                                // Global instrumentation sees far more runtime traffic than a focused
+                                                // graph can ever use. Drop it before history allocation/listener delivery
+                                                // so the Swing queue and timeline never pay for impossible-to-map events.
+                                                val filtered = filteredProfilerEvents.incrementAndGet()
+                                                if (filtered == 1L || filtered % STATUS_PUBLISH_EVERY == 0L) publishStatus()
                                             } else {
-                                                remember(event)
+                                                // Render UI control responses are kept out of profiler history;
+                                                // image payloads can be large and have different retention semantics.
+                                                if (composeControlEvent) {
+                                                    if (event.kind == "compose-current" || event.kind == "compose-current-error") {
+                                                        currentComposeResponse = event
+                                                    } else {
+                                                        composeRenderResponses[event.stateKey] = event
+                                                    }
+                                                } else {
+                                                    remember(event)
+                                                }
                                                 listeners.forEach { it(event) }
-                                                // Runtime Flow delivery can be extremely hot. Status is sampled;
-                                                // the UI also polls status whenever it flushes an event batch.
                                                 if (valid % STATUS_PUBLISH_EVERY == 0L) publishStatus()
                                             }
                                         }
@@ -118,6 +156,7 @@ class LiveTraceService : Disposable {
                                 lastError = "Client error: ${error.message ?: error.javaClass.simpleName}"
                             }
                         } finally {
+                            commandWriter?.let(commandWriters::remove)
                             activeClients.updateAndGet { value -> (value - 1).coerceAtLeast(0) }
                             publishStatus()
                         }
@@ -137,6 +176,55 @@ class LiveTraceService : Disposable {
         lastError = "Could not listen: ${error.message ?: error.javaClass.simpleName}"
         publishStatus()
     }
+
+    /**
+     * Ask every connected instrumented debug process to capture the currently rendered pixels for
+     * [runtimeKey]. The request is sent over the existing live-trace socket; the app answers with a
+     * `compose-image` event after inspecting its live CompositionData/slot table.
+     *
+     * @return number of active clients that accepted the command.
+     */
+    fun requestComposeImage(runtimeKey: String): Int {
+        if (runtimeKey.isBlank()) return 0
+        val encoded = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(runtimeKey.toByteArray(StandardCharsets.UTF_8))
+        var sent = 0
+        commandWriters.toList().forEach { out ->
+            val ok = runCatching {
+                synchronized(out) {
+                    out.write("FGC1\t")
+                    out.write(encoded)
+                    out.newLine()
+                    out.flush()
+                }
+            }.isSuccess
+            if (ok) {
+                sent++
+            } else {
+                commandWriters.remove(out)
+            }
+        }
+        return sent
+    }
+
+
+    /** Ask the connected debug app which source composables are currently visible on-screen. */
+    fun requestCurrentCompose(): Int {
+        var sent = 0
+        commandWriters.toList().forEach { out ->
+            val ok = runCatching {
+                synchronized(out) {
+                    out.write("FGC2\tCURRENT")
+                    out.newLine()
+                    out.flush()
+                }
+            }.isSuccess
+            if (ok) sent++ else commandWriters.remove(out)
+        }
+        return sent
+    }
+
+    fun latestCurrentComposeResponse(): RuntimeTraceEvent? = currentComposeResponse
 
     fun stop() {
         running.set(false)
@@ -167,6 +255,31 @@ class LiveTraceService : Disposable {
 
     fun isRecordingPaused(): Boolean = recordingPaused.get()
 
+    /**
+     * Restrict profiler retention/delivery to events useful to the active graph. Existing history
+     * is pruned immediately with the same predicate so a graph switch cannot leave 30k irrelevant
+     * samples for the timeline to scan. Pass null to disable filtering.
+     */
+    fun setProfilerEventFilter(filter: ((RuntimeTraceEvent) -> Boolean)?) {
+        profilerEventFilter = filter
+        filteredProfilerEvents.set(0)
+        if (filter != null) {
+            synchronized(historyLock) {
+                val iterator = recentEvents.iterator()
+                while (iterator.hasNext()) {
+                    val event = iterator.next()
+                    if (!runCatching { filter(event) }.getOrDefault(true)) iterator.remove()
+                }
+            }
+        }
+        publishStatus()
+    }
+
+    private fun acceptProfilerEvent(event: RuntimeTraceEvent): Boolean {
+        val filter = profilerEventFilter ?: return true
+        return runCatching { filter(event) }.getOrDefault(true)
+    }
+
     fun addListener(listener: (RuntimeTraceEvent) -> Unit) {
         listeners += listener
     }
@@ -184,6 +297,9 @@ class LiveTraceService : Disposable {
         statusListeners -= listener
     }
 
+    fun latestComposeRenderResponse(runtimeKey: String): RuntimeTraceEvent? =
+        composeRenderResponses[runtimeKey]
+
     /**
      * Recent runtime events are retained independently of the currently displayed static graph.
      * This lets the user switch to a different StateFlow graph without rebuilding or losing the
@@ -196,6 +312,8 @@ class LiveTraceService : Disposable {
 
     fun clearRecentEvents() = synchronized(historyLock) {
         recentEvents.clear()
+        composeRenderResponses.clear()
+        currentComposeResponse = null
     }
 
     override fun dispose() {
@@ -203,6 +321,9 @@ class LiveTraceService : Disposable {
         executor.shutdownNow()
         listeners.clear()
         statusListeners.clear()
+        commandWriters.clear()
+        composeRenderResponses.clear()
+        currentComposeResponse = null
     }
 
     private fun remember(event: RuntimeTraceEvent) {
@@ -236,6 +357,10 @@ class LiveTraceService : Disposable {
             valueSummary = decode(4).takeIf { it.isNotBlank() },
             site = decode(5).takeIf { it.isNotBlank() },
             fields = decode(6).split(',').map(String::trim).filter(String::isNotEmpty).toSet(),
+            occurrences = parts.getOrNull(7)?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+            // v0.17.30+ appends an optional Compose State runtime-instance id. Older runtimes end
+            // after occurrences, so parsing remains backward compatible.
+            instanceId = parts.getOrNull(8)?.toIntOrNull(),
         )
     }
 

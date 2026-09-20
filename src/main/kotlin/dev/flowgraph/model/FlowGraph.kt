@@ -2,6 +2,7 @@ package dev.flowgraph.model
 
 import com.intellij.openapi.vfs.VirtualFile
 import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
 
 enum class NodeKind {
     STATE,
@@ -14,6 +15,8 @@ enum class NodeKind {
     BEHAVIOR,
     /** A read/observer site for which no tracked Flow write was discovered. */
     READ,
+    /** A source @Composable function that consumes Flow-backed state or is called by one. */
+    COMPOSABLE,
     /** Synthetic strongly-connected state cycle collapsed for readability. */
     CYCLE,
     /** Synthetic framework/dependency cluster collapsed for readability. */
@@ -26,6 +29,12 @@ data class SourceLocation(
     val line: Int,
 )
 
+enum class NodeGroupKind {
+    VIEW_MODEL,
+    COMPOSE,
+    SOURCE,
+}
+
 data class FlowNode(
     val id: String,
     val label: String,
@@ -34,6 +43,12 @@ data class FlowNode(
     val source: SourceLocation?,
     /** Stable-ish source key used by the optional runtime trace bridge, e.g. com.foo.PlayerVm._state. */
     val runtimeKey: String? = null,
+    /** Stable semantic owner used by the project overview for ViewModel/screen clustering. */
+    val groupKey: String? = null,
+    val groupLabel: String? = null,
+    val groupKind: NodeGroupKind? = null,
+    /** Additional exact runtime identities that map to this node (for example delegated-State access sites). */
+    val runtimeAliases: Set<String> = emptySet(),
 )
 
 enum class EdgeKind {
@@ -49,6 +64,10 @@ enum class EdgeKind {
     TRIGGERS_WRITE,
     /** The source Flow is observed/read here, but no tracked state write is known. */
     READS,
+    /** A collectAsState/collectAsStateWithLifecycle result invalidates/recomposes a composable. */
+    UPDATES_COMPOSE,
+    /** A composable invokes another source composable. */
+    COMPOSES,
     /** Same-scope/helper analysis found a possible causal read -> write relation. */
     POSSIBLY_TRIGGERS_WRITE,
     /** Synthetic edge used only by the collapsed State Changes view. */
@@ -138,14 +157,28 @@ data class FlowGraph(
     val fieldDependencies: List<FieldDependency> = emptyList(),
     val diagnostics: List<String> = emptyList(),
 ) {
-    private val nodesById: Map<String, FlowNode>
-        get() = nodes.associateBy { it.id }
+    // FlowGraph is immutable after analysis. Build hot lookup structures once instead of
+    // allocating/filtering the whole node list for every runtime sample and every timeline scrub.
+    private val nodesById: Map<String, FlowNode> = nodes.associateBy { it.id }
+    private val edgesByTo: Map<String, List<FlowEdge>> = edges.groupBy { it.to }
+    private val runtimeLookupCache = ConcurrentHashMap<String, FlowNode>()
+    private val runtimeLookupMisses = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
     private var stateTransitionsCache: List<StateTransition>? = null
+    @Volatile
+    private var stateTransitionsByTargetCache: Map<String, List<StateTransition>>? = null
 
     fun node(nodeId: String): FlowNode? = nodesById[nodeId]
 
+    fun incomingEdges(nodeId: String): List<FlowEdge> = edgesByTo[nodeId].orEmpty()
+
+    fun stateTransitionsTo(nodeId: String): List<StateTransition> {
+        stateTransitionsByTargetCache?.let { return it[nodeId].orEmpty() }
+        val grouped = stateTransitions().groupBy { it.targetStateId }
+        stateTransitionsByTargetCache = grouped
+        return grouped[nodeId].orEmpty()
+    }
 
     fun fieldsForState(stateId: String): List<FlowNode> {
         val fieldIds = edges.asSequence()
@@ -158,6 +191,16 @@ data class FlowGraph(
     /** Maps both source-property runtime keys and v0.11 synthetic cold-flow operator keys. */
     fun nodeByRuntimeKey(key: String): FlowNode? {
         val normalized = key.trim()
+        if (normalized.isEmpty()) return null
+        runtimeLookupCache[normalized]?.let { return it }
+        if (normalized in runtimeLookupMisses) return null
+
+        val resolved = resolveNodeByRuntimeKey(normalized)
+        if (resolved != null) runtimeLookupCache[normalized] = resolved else runtimeLookupMisses += normalized
+        return resolved
+    }
+
+    private fun resolveNodeByRuntimeKey(normalized: String): FlowNode? {
         if (normalized.startsWith("@flowop|")) {
             val parts = normalized.split('|')
             val line = parts.getOrNull(2)?.toIntOrNull()
@@ -190,23 +233,87 @@ data class FlowGraph(
             }
             return null
         }
+        if (normalized.startsWith("@compose|")) {
+            return nodes.filter { it.kind == NodeKind.COMPOSABLE && it.runtimeKey == normalized }.singleOrNull()
+        }
+        if (normalized.startsWith("@composestate2|")) {
+            val parts = normalized.split('|')
+            val sourceFile = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+            val line = parts.getOrNull(2)?.toIntOrNull()
+            val callName = parts.getOrNull(3)?.takeIf { it.isNotBlank() }
+            val sourceFunction = parts.getOrNull(4)?.takeIf { it.isNotBlank() }
+            if (sourceFile != null && line != null && callName != null && sourceFunction != null) {
+                // v0.17.34+: exact source declaration identity. Function context is essential: Kotlin
+                // inline/composable lowering can assign the same source line to unrelated State
+                // factories. Never fall back to file+line for a v2 runtime event.
+                val exactSourceKey =
+                    "@composestate-source2|$sourceFile|$line|$callName|$sourceFunction"
+                val exact = nodes.filter { node ->
+                    node.kind == NodeKind.STATE && node.runtimeKey == exactSourceKey
+                }
+                if (exact.size == 1) return exact.first()
+                return null
+            }
+            return null
+        }
+        if (normalized.startsWith("@composestate|")) {
+            val parts = normalized.split('|')
+            val line = parts.getOrNull(2)?.toIntOrNull()
+            val callName = parts.getOrNull(3)?.takeIf { it.isNotBlank() }
+            val sourceFile = parts.getOrNull(4)?.takeIf { it.isNotBlank() }
+            if (line != null && callName != null && sourceFile != null) {
+                // Legacy v0.17.32 runtime key: source factory without function context.
+                // Do not collapse every State-producing call on one bytecode/source line into the
+                // first static Compose-state node; animated/updated states can write at frame rate.
+                val exactSourceKey = "@composestate-source|$sourceFile|$line|$callName"
+                val exact = nodes.filter { node ->
+                    node.kind == NodeKind.STATE && node.runtimeKey == exactSourceKey
+                }
+                if (exact.size == 1) return exact.first()
+
+                // Backward compatibility for graphs produced by pre-v0.17.32 analyzers. Restrict
+                // legacy matching to an explicit old line key and the same source file; never use
+                // arbitrary node.source line fallback for a modern dynamic Compose-state event.
+                val legacy = nodes.filter { node ->
+                    node.kind == NodeKind.STATE &&
+                        node.runtimeKey == "@composestate-line|$line" &&
+                        node.source?.file?.name == sourceFile
+                }
+                if (legacy.size == 1) return legacy.first()
+                return null
+            }
+            return null
+        }
         return stateByRuntimeKey(normalized)
     }
 
     fun stateByRuntimeKey(key: String): FlowNode? {
         val normalized = key.trim()
         if (normalized.isEmpty()) return null
-        val exact = nodes.firstOrNull { it.kind == NodeKind.STATE && it.runtimeKey == normalized }
+        val exact = nodes.firstOrNull {
+            it.kind == NodeKind.STATE && (it.runtimeKey == normalized || normalized in it.runtimeAliases)
+        }
         if (exact != null) return exact
         val suffix = nodes.filter { it.kind == NodeKind.STATE && it.runtimeKey?.endsWith(normalized) == true }
         if (suffix.size == 1) return suffix.first()
-        val byLabel = nodes.filter { it.kind == NodeKind.STATE && it.label == normalized }
+
+        // Fuzzy label/trailing-field matching is only valid for real JVM field-backed state. Local
+        // and delegated Compose State uses synthetic @composestate* identities and must never win
+        // this fallback. Otherwise an unrelated runtime key such as `SomeRepository.state` can be
+        // mapped to a local Compose variable merely because its source label is also `state`. That
+        // was the source of impossible values such as [] appearing on ThumbState.
+        val fieldBackedCandidates = nodes.filter { node ->
+            node.kind == NodeKind.STATE &&
+                node.runtimeKey != null &&
+                !node.runtimeKey.startsWith("@")
+        }
+        val byLabel = fieldBackedCandidates.filter { it.label == normalized }
         if (byLabel.size == 1) return byLabel.first()
         // Automatic bytecode instrumentation can only see JVM owners/fields. Companion/top-level
         // lowering can therefore produce a key whose owner differs from the source-level owner.
-        // A unique trailing field name is a safe final fallback and keeps those events useful.
+        // Keep the trailing-field fallback, but only inside field-backed candidates.
         val trailingName = normalized.substringAfterLast('.')
-        return nodes.filter { it.kind == NodeKind.STATE && it.label == trailingName }.singleOrNull()
+        return fieldBackedCandidates.filter { it.label == trailingName }.singleOrNull()
     }
 
     fun dependenciesForField(fieldId: String): List<FieldDependency> =
@@ -368,6 +475,24 @@ data class FlowGraph(
             }
             .toMutableList()
 
+        // Compose remains visible even in the collapsed State Changes view. Collapse the
+        // collectAsState* plumbing into StateFlow -> @Composable edges, then keep the source
+        // composable call hierarchy. Show operators can still reveal the collector node itself.
+        val composeNodes = nodes.filter { it.kind == NodeKind.COMPOSABLE }
+        val composeIds = composeNodes.mapTo(linkedSetOf()) { it.id }
+        edges.filter { it.kind == EdgeKind.UPDATES_COMPOSE && it.to in composeIds }.forEach { update ->
+            upstreamStatesFor(update.from, maxDepth = 8).forEach { sourceState ->
+                projectedEdges += FlowEdge(
+                    from = sourceState,
+                    to = update.to,
+                    kind = EdgeKind.UPDATES_COMPOSE,
+                    label = update.label ?: "collectAsState → recompose",
+                    source = update.source,
+                )
+            }
+        }
+        projectedEdges += edges.filter { it.kind == EdgeKind.COMPOSES && it.from in composeIds && it.to in composeIds }
+
         val readNodes = if (includeReads) nodes.filter { it.kind == NodeKind.READ } else emptyList()
         val readIds = readNodes.mapTo(linkedSetOf()) { it.id }
         if (includeReads) {
@@ -378,9 +503,30 @@ data class FlowGraph(
 
         return copy(
             rootLabel = "$rootLabel • state changes",
-            nodes = nodes.filter { it.id in stateIds && it.kind == NodeKind.STATE } + readNodes,
-            edges = projectedEdges,
+            nodes = nodes.filter { it.id in stateIds && it.kind == NodeKind.STATE } + composeNodes + readNodes,
+            edges = projectedEdges.distinctBy { Triple(it.from, it.to, it.kind) },
         )
+    }
+
+    private fun upstreamStatesFor(startId: String, maxDepth: Int): Set<String> {
+        data class Step(val id: String, val depth: Int)
+        val result = linkedSetOf<String>()
+        val visited = mutableSetOf(startId)
+        val queue = ArrayDeque<Step>()
+        queue += Step(startId, 0)
+        while (queue.isNotEmpty()) {
+            val step = queue.removeFirst()
+            if (step.depth >= maxDepth) continue
+            edges.asSequence()
+                .filter { it.to == step.id && it.kind != EdgeKind.READS && it.kind != EdgeKind.COMPOSES }
+                .forEach { edge ->
+                    if (!visited.add(edge.from)) return@forEach
+                    val source = nodesById[edge.from] ?: return@forEach
+                    if (source.kind == NodeKind.STATE) result += source.id
+                    else queue += Step(source.id, step.depth + 1)
+                }
+        }
+        return result
     }
 
     fun withoutReads(): FlowGraph {

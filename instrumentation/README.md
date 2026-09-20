@@ -1,29 +1,48 @@
-# Flow Graph automatic runtime instrumentation v0.11
+# Flow Graph runtime instrumentation
 
-This included Gradle build provides:
+The Android-side integration is split into a normal Gradle plugin plus a debug-only runtime.
 
-- `dev.flowgraph.instrumentation` — AGP ASM instrumentation plugin
-- `dev.flowgraph:flowgraph-runtime:0.11.3` — debug runtime transport/helper
+## Consumer setup
 
-v0.11 instruments debug builds globally by default and traces:
-
-- Flow/StateFlow/SharedFlow field registration
-- StateFlow `getValue`, `setValue`, `compareAndSet`
-- SharedFlow `tryEmit`
-- suspended SharedFlow `emit` requests
-- `Flow.collect(FlowCollector, Continuation)` collector binding
-- `FlowCollector.emit(value, Continuation)` value delivery
-- Flow-returning call sites for best-effort intermediate operator runtime IDs
-
-Suggested app configuration:
+Add JitPack to dependency repositories in `settings.gradle.kts`:
 
 ```kotlin
-flowGraphInstrumentation {
-    instrumentAllEligibleFlows.set(true)
-    traceReads.set(true)
-    traceColdFlows.set(true)
-    traceSuspendingEmits.set(true)
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
 }
 ```
 
-Deep cold-flow tracing is intentionally debug-only and has higher runtime/build overhead than StateFlow-only tracing.
+`app/build.gradle.kts`:
+
+```kotlin
+plugins {
+    id("dev.flowgraph.instrumentation") version "0.18.4"
+}
+
+dependencies {
+    debugImplementation("com.github.elivity:flow-graph:0.18.4")
+}
+```
+
+Optional:
+
+```kotlin
+flowGraphInstrumentation {
+    traceReads.set(true)
+    traceColdFlows.set(true)
+    traceSuspendingEmits.set(true)
+    traceCompose.set(true)
+    traceUiInteractions.set(true)
+}
+```
+
+The Gradle plugin instruments only the Android `debug` variant. The runtime dependency should therefore also use `debugImplementation`.
+
+## Published artifacts
+
+- Gradle plugin ID: `dev.flowgraph.instrumentation` (Gradle Plugin Portal)
+- Runtime: `com.github.elivity:flow-graph:0.18.4` (JitPack)

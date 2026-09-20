@@ -1,0 +1,9 @@
+jdk:
+  - openjdk21
+
+before_install:
+  - sdk install gradle 9.4.1
+  - sdk use gradle 9.4.1
+
+install:
+  - gradle -p instrumentation :flowgraph-runtime:clean :flowgraph-runtime:publishToMavenLocal -Pgroup=$GROUP -Partifact=$ARTIFACT -Pversion=$VERSION --no-daemon --stacktrace

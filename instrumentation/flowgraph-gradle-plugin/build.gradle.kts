@@ -1,13 +1,30 @@
+import java.util.Properties
 plugins {
-    kotlin("jvm") version "2.1.20"
-    `java-gradle-plugin`
+    kotlin("jvm") version "2.3.0"
+    id("com.gradle.plugin-publish") version "2.2.1"
 }
 
+group = "dev.flowgraph"
+
+val releasePropertiesFile = layout.projectDirectory.file("../../gradle.properties").asFile
+val releaseProperties = Properties().apply {
+    releasePropertiesFile.inputStream().use { input ->
+        load(input)
+    }
+}
+val flowGraphVersion = releaseProperties.getProperty("flowGraphVersion")
+    ?: error("flowGraphVersion missing from ../../gradle.properties")
+val projectUrl = releaseProperties.getProperty("flowGraphProjectUrl")
+    ?: error("flowGraphProjectUrl missing from ../../gradle.properties")
+val scmUrl = releaseProperties.getProperty("flowGraphScmUrl")
+    ?: error("flowGraphScmUrl missing from ../../gradle.properties")
+
+version = flowGraphVersion
 
 dependencies {
-    // Compile against an older stable AGP API. The instrumentation API used here exists in 8.x
-    // and remains available in AGP 9.x through Variant.instrumentation.
-    compileOnly("com.android.tools.build:gradle-api:8.9.0")
+    // Only APIs are needed while compiling the Gradle plugin. The consuming Android app
+    // declares flowgraph-runtime explicitly as debugImplementation.
+    compileOnly("com.android.tools.build:gradle-api:9.3.2")
     compileOnly("org.ow2.asm:asm:9.7.1")
     compileOnly("org.ow2.asm:asm-commons:9.7.1")
 }
@@ -17,12 +34,16 @@ kotlin {
 }
 
 gradlePlugin {
+    website = projectUrl
+    vcsUrl = scmUrl
+
     plugins {
         create("flowGraphInstrumentation") {
             id = "dev.flowgraph.instrumentation"
             implementationClass = "dev.flowgraph.instrumentation.FlowGraphInstrumentationPlugin"
-            displayName = "Flow Graph automatic runtime instrumentation"
-            description = "Debug-only ASM instrumentation for Flow Graph StateFlow, SharedFlow and cold Flow runtime tracing."
+            displayName = "Flow Graph Runtime Instrumentation"
+            description = "Debug-only Android bytecode instrumentation for Flow Graph runtime tracing."
+            tags.set(listOf("android", "kotlin", "flow", "stateflow", "compose", "profiling"))
         }
     }
 }

@@ -1,0 +1,27 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.java.execution.impl" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.java.execution.impl" ext="jar" conf="default" url="plugins/java/lib/modules" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledPlugin" name="com.intellij.java" rev="IU-262.8665.337" />
+    <dependency org="bundledPlugin" name="Coverage" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.backend" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.codeserver.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.compiler" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.debugger" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.debugger.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.execution" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.indexing" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.smRunner" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.testRunner" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.vcs.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.vcs.impl.lang" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>

@@ -88,12 +88,28 @@ internal data class ReadBehavior(
  */
 @OptIn(KaExperimentalApi::class)
 internal object FlowSemantics {
-    private val stateFlowIds = setOf(
+    private val coroutineFlowIds = setOf(
         ClassId.fromString("kotlinx/coroutines/flow/StateFlow"),
         ClassId.fromString("kotlinx/coroutines/flow/MutableStateFlow"),
         ClassId.fromString("kotlinx/coroutines/flow/SharedFlow"),
         ClassId.fromString("kotlinx/coroutines/flow/MutableSharedFlow"),
         ClassId.fromString("kotlinx/coroutines/flow/Flow"),
+    )
+    private val composeStateIds = setOf(
+        ClassId.fromString("androidx/compose/runtime/State"),
+        ClassId.fromString("androidx/compose/runtime/MutableState"),
+        ClassId.fromString("androidx/compose/runtime/IntState"),
+        ClassId.fromString("androidx/compose/runtime/MutableIntState"),
+        ClassId.fromString("androidx/compose/runtime/LongState"),
+        ClassId.fromString("androidx/compose/runtime/MutableLongState"),
+        ClassId.fromString("androidx/compose/runtime/FloatState"),
+        ClassId.fromString("androidx/compose/runtime/MutableFloatState"),
+        ClassId.fromString("androidx/compose/runtime/DoubleState"),
+        ClassId.fromString("androidx/compose/runtime/MutableDoubleState"),
+    )
+    private val composeStateFactoryNames = setOf(
+        "mutableStateOf", "derivedStateOf", "rememberUpdatedState", "produceState",
+        "mutableIntStateOf", "mutableLongStateOf", "mutableFloatStateOf", "mutableDoubleStateOf",
     )
 
     private val writerNames = setOf("update", "getAndUpdate", "updateAndGet", "emit", "tryEmit")
@@ -121,14 +137,64 @@ internal object FlowSemantics {
         "flattenLatest", "flattenConcat", "flattenMerge", "scan", "runningFold", "runningReduce", "zip",
     )
 
-    fun isFlowProperty(property: KtProperty): Boolean = analyze(property) {
+    fun isFlowProperty(property: KtProperty): Boolean = isCoroutineFlowProperty(property) || isComposeStateProperty(property)
+
+    fun isCoroutineFlowProperty(property: KtProperty): Boolean = analyze(property) {
         val type = property.symbol.returnType
-        type is KaClassType && type.classId in stateFlowIds
+        type is KaClassType && type.classId in coroutineFlowIds
     }
 
-    fun flowTypeName(property: KtProperty): String = analyze(property) {
-        val type = property.symbol.returnType as? KaClassType ?: return@analyze "Flow"
-        type.classId?.shortClassName?.asString() ?: "Flow"
+    fun isComposeStateProperty(property: KtProperty): Boolean {
+        val typedState = analyze(property) {
+            val type = property.symbol.returnType
+            type is KaClassType && type.classId in composeStateIds
+        }
+        if (typedState) return true
+
+        // Delegated Compose state (`var count by remember { mutableStateOf(0) }`) has the value type
+        // as the KtProperty return type, so inspect the delegate/initializer for the state factory.
+        return composeStateFactoryAnchor(property) != null
+    }
+
+    fun composeStateFactoryAnchor(property: KtProperty): KtCallExpression? {
+        val root = property.delegateExpression ?: property.initializer ?: return null
+        val calls = PsiTreeUtil.collectElementsOfType(root, KtCallExpression::class.java)
+
+        // Prefer the explicit runtime factories first. This avoids selecting a generic wrapper such
+        // as remember<T>(), whose source-level substituted type may be State even though its JVM
+        // return descriptor is Object and therefore cannot be registered at that call site.
+        calls.firstOrNull { call ->
+            val id = resolveCallId(call) ?: return@firstOrNull false
+            val name = id.substringAfterLast('.')
+            name in composeStateFactoryNames && id.startsWith("androidx.compose.runtime.")
+        }?.let { return it }
+
+        // Also support State-producing APIs outside androidx.compose.runtime, notably animation
+        // *AsState helpers and Flow collectAsState variants. Their declared callable return type is
+        // a concrete Compose State interface, which matches the JVM return-type instrumentation.
+        return calls.firstOrNull(::callReturnsComposeState)
+    }
+
+    /**
+     * JVM instrumentation reports the actual Compose state-producing method name (for example
+     * `rememberUpdatedState` or `mutableFloatStateOf`). Keep that discriminator in the static
+     * graph too: source line alone is not precise enough once inline Compose code, animations and
+     * multiple state factories share bytecode line tables.
+     */
+    fun composeStateFactoryName(property: KtProperty): String? {
+        val call = composeStateFactoryAnchor(property) ?: return null
+        return resolveCallId(call)?.substringAfterLast('.')
+    }
+
+    fun flowTypeName(property: KtProperty): String {
+        if (isComposeStateProperty(property)) {
+            val delegated = property.delegateExpression != null
+            if (delegated) return "Compose State (delegated)"
+        }
+        return analyze(property) {
+            val type = property.symbol.returnType as? KaClassType ?: return@analyze "Flow"
+            type.classId?.shortClassName?.asString() ?: "Flow"
+        }
     }
 
     fun resolvesTo(reference: KtNameReferenceExpression, target: KtProperty): Boolean = analyze(reference) {
@@ -233,6 +299,7 @@ internal object FlowSemantics {
 
     /** Returns a writer only when the immediate operation really resolves to kotlinx.coroutines Flow APIs. */
     fun writerFor(reference: KtNameReferenceExpression): WriterSemantics? {
+        directPropertyWrite(reference)?.let { return it }
         valueWrite(reference)?.let { return it }
 
         val call = immediateReceiverCall(reference) ?: return null
@@ -429,9 +496,12 @@ internal object FlowSemantics {
         }
     }
 
-    private fun sourceFunction(call: KtCallExpression): KtNamedFunction? = analyze(call) {
+    fun sourceFunction(call: KtCallExpression): KtNamedFunction? = analyze(call) {
         call.resolveToCall()?.singleFunctionCallOrNull()?.symbol?.psi as? KtNamedFunction
     }
+
+    fun isComposableFunction(function: KtNamedFunction): Boolean =
+        function.annotationEntries.any { entry -> entry.shortName?.asString() == "Composable" }
 
     private fun transformLambda(call: KtCallExpression): KtLambdaExpression? =
         call.lambdaArguments.lastOrNull()?.getLambdaExpression()
@@ -542,6 +612,20 @@ internal object FlowSemantics {
             current = when (val parent = current.parent) {
                 is KtParenthesizedExpression -> parent
                 is KtAnnotatedExpression -> parent
+
+                // A reference to a member Flow is usually the selector of a qualified access:
+                //
+                //     tracksViewModel.trackObjectsFlow.collectAsStateWithLifecycle()
+                //                     ^^^^^^^^^^^^^^^^
+                //
+                // The value that feeds the next call is the *whole* qualified expression
+                // `tracksViewModel.trackObjectsFlow`, not just the selector token. Lift through
+                // selector-qualified accesses so nextCallUsingValue() can continue outward to the
+                // collector/operator call. This also handles longer chains such as holder.vm.flow.
+                is KtQualifiedExpression -> {
+                    if (parent.selectorExpression == current) parent else return current
+                }
+
                 else -> return current
             }
         }
@@ -558,6 +642,27 @@ internal object FlowSemantics {
         return "value read"
     }
 
+    private fun directPropertyWrite(reference: KtNameReferenceExpression): WriterSemantics? {
+        val target = resolveFlowProperty(reference) ?: return null
+        if (!isComposeStateProperty(target)) return null
+        val assignment = reference.parent as? KtBinaryExpression ?: return null
+        if (assignment.left != reference || assignment.operationToken != KtTokens.EQ) return null
+        return WriterSemantics(
+            label = "state =",
+            callId = "androidx.compose.runtime.delegatedState.setValue",
+            anchor = assignment,
+            changedFields = extractChangedFields(assignment.right),
+        )
+    }
+
+    fun enclosingDerivedComposeStateProperty(reference: KtNameReferenceExpression): KtProperty? {
+        val property = PsiTreeUtil.getParentOfType(reference, KtProperty::class.java, false) ?: return null
+        if (property == reference) return null
+        val root = property.delegateExpression ?: property.initializer ?: return null
+        if (!root.textRange.contains(reference.textRange)) return null
+        return property.takeIf(::isComposeStateProperty)
+    }
+
     private fun valueWrite(reference: KtNameReferenceExpression): WriterSemantics? {
         val qualified = PsiTreeUtil.getParentOfType(reference, KtDotQualifiedExpression::class.java, false)
             ?: return null
@@ -570,7 +675,9 @@ internal object FlowSemantics {
         val callableId = analyze(selector) {
             (selector.mainReference.resolveToSymbol() as? KaPropertySymbol)?.callableId?.asSingleFqName()?.asString()
         } ?: return null
-        if (!callableId.startsWith("kotlinx.coroutines.flow.")) return null
+        val supportedValueOwner = callableId.startsWith("kotlinx.coroutines.flow.") ||
+            callableId.startsWith("androidx.compose.runtime.")
+        if (!supportedValueOwner) return null
 
         val assignment = qualified.parent as? KtBinaryExpression ?: return null
         if (assignment.left != qualified || assignment.operationToken != KtTokens.EQ) return null
@@ -680,6 +787,11 @@ internal object FlowSemantics {
         KtTokens.DIVEQ,
         KtTokens.PERCEQ,
     )
+
+    private fun callReturnsComposeState(call: KtCallExpression): Boolean = analyze(call) {
+        val type = call.resolveToCall()?.singleFunctionCallOrNull()?.symbol?.returnType
+        type is KaClassType && type.classId in composeStateIds
+    }
 
     private fun resolveCallId(call: KtCallExpression): String? = analyze(call) {
         call.resolveToCall()?.singleFunctionCallOrNull()?.symbol?.callableId?.asSingleFqName()?.asString()

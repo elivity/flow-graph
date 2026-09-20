@@ -17,7 +17,9 @@ import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtClassOrObject
+import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtProperty
@@ -42,7 +44,7 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
                     rootLabel = root.name ?: "property",
                     nodes = emptyList(),
                     edges = emptyList(),
-                    diagnostics = listOf("${root.name} does not resolve to Flow/StateFlow/SharedFlow."),
+                    diagnostics = listOf("${root.name} does not resolve to Flow/StateFlow/SharedFlow/Compose State."),
                 )
             }
 
@@ -50,9 +52,10 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
         }
 
     /**
-     * Builds one project-wide graph containing every non-local Kotlin Flow/StateFlow/SharedFlow
-     * property under project content roots. Disconnected parts are intentionally kept in the same
-     * FlowGraph; the canvas lays those connected components out as separate visual clusters.
+     * Builds one project-wide graph containing every Kotlin Flow/StateFlow/SharedFlow/Compose State property
+     * under project content roots, including local properties declared inside functions/composables.
+     * Disconnected parts are intentionally kept in the same FlowGraph; the canvas lays those
+     * connected components out as separate visual clusters.
      */
     @OptIn(KaExperimentalApi::class)
     fun analyzeAllProjectFlows(): FlowGraph = ReadAction.compute<FlowGraph, RuntimeException> {
@@ -62,7 +65,7 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
                 rootLabel = "All project flows",
                 nodes = emptyList(),
                 edges = emptyList(),
-                diagnostics = listOf("No non-local Kotlin Flow/StateFlow/SharedFlow properties were found in project sources."),
+                diagnostics = listOf("No Kotlin Flow/StateFlow/SharedFlow/Compose State properties were found in project sources."),
             )
         }
 
@@ -96,7 +99,9 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
             val ktFile = psiManager.findFile(file) as? KtFile ?: continue
             for (property in PsiTreeUtil.findChildrenOfType(ktFile, KtProperty::class.java)) {
                 ProgressManager.checkCanceled()
-                if (property.isLocal) continue
+                // Local StateFlow/SharedFlow properties matter for Compose. A flow created inside
+                // a composable/helper can be the direct source of collectAsState*, and skipping it
+                // prevents the owning/sub-composable branch from ever entering the project graph.
                 propertiesInspected++
                 if (propertiesInspected > MAX_PROJECT_PROPERTIES_TO_INSPECT) {
                     return roots.distinctBy(::propertyId)
@@ -120,6 +125,29 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
         return analyze(ref) {
             (ref.mainReference.resolveToSymbol() as? KaPropertySymbol)?.psi as? KtProperty
         }
+    }
+
+
+    private fun propertyReferenceExpressions(property: KtProperty): List<KtNameReferenceExpression> {
+        // Local/delegated Compose state is not a globally indexed symbol. In practice a project-wide
+        // ReferencesSearch can return zero references for `var state by remember { mutableStateOf(...) }`,
+        // leaving the state node orphaned even though the composable reads/writes it. Resolve local
+        // name references directly inside the lexical owner instead.
+        if (property.isLocal) {
+            val owner: PsiElement = PsiTreeUtil.getParentOfType(property, KtNamedFunction::class.java, false)
+                ?: PsiTreeUtil.getParentOfType(property, KtLambdaExpression::class.java, false)
+                ?: property.containingFile
+            val expectedName = property.name
+            return PsiTreeUtil.collectElementsOfType(owner, KtNameReferenceExpression::class.java)
+                .asSequence()
+                .filter { expectedName == null || it.getReferencedName() == expectedName }
+                .filter { FlowSemantics.resolvesTo(it, property) }
+                .toList()
+        }
+        return ReferencesSearch.search(property, GlobalSearchScope.projectScope(project))
+            .findAll()
+            .mapNotNull { it.element as? KtNameReferenceExpression }
+            .filter { FlowSemantics.resolvesTo(it, property) }
     }
 
     private fun buildGraph(root: KtProperty): FlowGraph = buildGraph(
@@ -162,22 +190,57 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
             val stateId = propertyId(property)
             nodes.putIfAbsent(stateId, stateNode(property))
 
-            val references = ReferencesSearch.search(
-                property,
-                GlobalSearchScope.projectScope(project),
-            ).findAll()
+            val references = propertyReferenceExpressions(property)
             if (references.size > MAX_REFERENCES_PER_PROPERTY) {
                 diagnostics += "${property.name}: ${references.size} references found; analyzing the first $MAX_REFERENCES_PER_PROPERTY to keep the IDE responsive."
             }
 
-            references.asSequence().take(MAX_REFERENCES_PER_PROPERTY).forEach { psiRef ->
+            references.asSequence().take(MAX_REFERENCES_PER_PROPERTY).forEach { reference ->
                 ProgressManager.checkCanceled()
-                val reference = psiRef.element as? KtNameReferenceExpression ?: return@forEach
-                if (!FlowSemantics.resolvesTo(reference, property)) return@forEach
 
                 val writer = FlowSemantics.writerFor(reference)
                 if (writer != null) {
                     addWriter(nodes, edges, property, stateId, writer)
+                    return@forEach
+                }
+
+                if (FlowSemantics.isComposeStateProperty(property)) {
+                    val derivedCompose = FlowSemantics.enclosingDerivedComposeStateProperty(reference)
+                    if (derivedCompose != null && derivedCompose != property) {
+                        val derivedId = propertyId(derivedCompose)
+                        nodes.putIfAbsent(derivedId, stateNode(derivedCompose))
+                        addEdge(
+                            edges,
+                            FlowEdge(
+                                from = stateId,
+                                to = derivedId,
+                                kind = EdgeKind.DERIVES,
+                                label = "derivedStateOf",
+                                source = sourceLocation(reference),
+                            ),
+                        )
+                        if (queued.add(derivedCompose)) queue += derivedCompose to (depth + 1)
+                    }
+
+                    val composeConsumerAdded = addDirectComposeStateConsumer(
+                        nodes = nodes,
+                        edges = edges,
+                        sourceStateId = stateId,
+                        reference = reference,
+                    )
+
+                    val behavior = FlowSemantics.readBehavior(reference)
+                    if (behavior.writes.isNotEmpty() || (!composeConsumerAdded && derivedCompose == null)) {
+                        val discovered = addReadBehavior(
+                            nodes = nodes,
+                            edges = edges,
+                            sourceStateId = stateId,
+                            behavior = behavior,
+                        )
+                        discovered.forEach { target ->
+                            if (queued.add(target)) queue += target to (depth + 1)
+                        }
+                    }
                     return@forEach
                 }
 
@@ -210,6 +273,7 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
                     path = path,
                     derived = derived,
                 )
+                val composeConsumerAdded = addComposeConsumer(nodes, edges, path)
 
                 // Contextual inputs and side-effect write targets are first-class graph roots too.
                 pathResult.discoveredProperties.forEach { input ->
@@ -222,7 +286,7 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
                     val tailId = path.stages.lastOrNull()?.let(::stageId) ?: stateId
                     addEdge(edges, FlowEdge(tailId, derivedId, EdgeKind.DERIVES))
                     if (queued.add(derived)) queue += derived to (depth + 1)
-                } else if (pathResult.sideEffectWriteCount == 0) {
+                } else if (pathResult.sideEffectWriteCount == 0 && !composeConsumerAdded) {
                     // Terminal collectors/readers that do not mutate tracked state are useful too,
                     // but they belong in the read-only observer cluster rather than the causal graph.
                     addTerminalRead(nodes, edges, stateId, path)
@@ -649,19 +713,314 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
 
     private fun stateNode(property: KtProperty): FlowNode {
         val type = property.typeReference?.text ?: FlowSemantics.flowTypeName(property)
-        val owner = PsiTreeUtil.getParentOfType(property, KtClassOrObject::class.java, false)?.name
+        val ownerClass = PsiTreeUtil.getParentOfType(property, KtClassOrObject::class.java, false)
+        val owner = ownerClass?.name
         val ownerPrefix = owner?.let { "$it." } ?: ""
         val packageName = property.containingKtFile.packageFqName.asString()
         val simpleKey = "$ownerPrefix${property.name ?: "state"}"
-        val runtimeKey = if (packageName.isBlank()) simpleKey else "$packageName.$simpleKey"
+        // Local variables have no JVM field key, so do not pretend they can be matched by the
+        // field-based runtime registration path. They are still first-class static graph roots and
+        // can expose their collectAsState* -> Compose subtree correctly.
+        val composeState = FlowSemantics.isComposeStateProperty(property)
+        val delegatedComposeState = composeState && property.delegateExpression != null
+        val composeFactory = if (composeState) FlowSemantics.composeStateFactoryAnchor(property) else null
+        val composeFactoryLine = composeFactory?.let(::sourceLocation)?.line?.plus(1)
+        val composeFactoryName = if (composeState) FlowSemantics.composeStateFactoryName(property) else null
+        val composeDeclarationLine = sourceLocation(property)?.line?.plus(1)
+        val composeSourceFile = property.containingKtFile.name
+        val composeSourceFunction = PsiTreeUtil.getParentOfType(property, KtNamedFunction::class.java, false)?.name
+            ?: "<top-level>"
+        val runtimeKey = when {
+            composeState && property.isLocal && delegatedComposeState && property.name != null &&
+                composeDeclarationLine != null ->
+                "@composestate-decl|$composeSourceFile|$composeSourceFunction|${property.name}|$composeDeclarationLine"
+            composeState && (property.isLocal || delegatedComposeState) &&
+                composeFactoryLine != null && composeFactoryName != null ->
+                "@composestate-source2|$composeSourceFile|$composeFactoryLine|$composeFactoryName|$composeSourceFunction"
+            property.isLocal || delegatedComposeState -> null
+            else -> if (packageName.isBlank()) simpleKey else "$packageName.$simpleKey"
+        }
+        val runtimeAliases = if (composeState && property.isLocal && delegatedComposeState && property.name != null) {
+            delegatedComposeStateAccessKeys(property, composeSourceFile, composeSourceFunction)
+        } else {
+            emptySet()
+        }
+        val localContext = if (property.isLocal) "local in ${ownerContext(property)} • " else ""
+        val stateFlavor = if (composeState) "Compose state • " else ""
+        val viewModel = ownerClass?.takeIf(::looksLikeViewModel)
         return FlowNode(
             id = propertyId(property),
             label = property.name ?: "<anonymous state>",
-            detail = "$type • $simpleKey • ${sourceDetail(property)}",
+            detail = "$type • $stateFlavor$localContext$simpleKey • ${sourceDetail(property)}",
             kind = NodeKind.STATE,
             source = sourceLocation(property),
             runtimeKey = runtimeKey,
+            groupKey = viewModel?.let { "vm:${it.containingKtFile.virtualFile.path}:${it.textOffset}" },
+            groupLabel = viewModel?.name,
+            groupKind = viewModel?.let { NodeGroupKind.VIEW_MODEL },
+            runtimeAliases = runtimeAliases,
         )
+    }
+
+    /**
+     * Runtime matching for delegated local Compose State is deliberately based on *source access*
+     * sites, not just file/function/property name. Kotlin/Compose inlining can copy dependency
+     * bytecode into the caller and preserve a generic local name such as `state`; those synthetic
+     * delegates must never be attributed to the user's source declaration.
+     */
+    private fun delegatedComposeStateAccessKeys(
+        property: KtProperty,
+        sourceFile: String,
+        sourceFunction: String,
+    ): Set<String> {
+        val propertyName = property.name ?: return emptySet()
+        val scope = PsiTreeUtil.getParentOfType(property, KtNamedFunction::class.java, false)
+            ?: property.containingKtFile
+        return PsiTreeUtil.findChildrenOfType(scope, KtNameReferenceExpression::class.java)
+            .asSequence()
+            .filter { it.getReferencedName() == propertyName }
+            .filter { reference -> runCatching { reference.mainReference.resolve() == property }.getOrDefault(false) }
+            .mapNotNull { reference ->
+                val line = sourceLocation(reference)?.line?.plus(1) ?: return@mapNotNull null
+                val accessKind = delegatedAccessKind(reference)
+                "@composestate-access|$sourceFile|$sourceFunction|$propertyName|$line|$accessKind"
+            }
+            .toSet()
+    }
+
+    private fun delegatedAccessKind(reference: KtNameReferenceExpression): String {
+        val parent = reference.parent
+        if (parent is org.jetbrains.kotlin.psi.KtBinaryExpression && parent.left == reference) {
+            val op = parent.operationReference.text
+            if (op in setOf("=", "+=", "-=", "*=", "/=", "%=")) return "write"
+        }
+        if (parent is org.jetbrains.kotlin.psi.KtUnaryExpression) {
+            val op = parent.operationReference.text
+            if (op == "++" || op == "--") return "write"
+        }
+        return "read"
+    }
+
+    /**
+     * Extends a Flow path into Compose when the terminal collector is collectAsState*.
+     * The collection call remains a first-class node; the owning @Composable and source child
+     * composables are appended so the detail graph can show:
+     *
+     * MutableStateFlow -> StateFlow -> collectAsStateWithLifecycle -> Screen -> ChildComposable
+     */
+    private data class ComposeOwner(
+        val node: FlowNode,
+        val body: PsiElement,
+        val function: KtNamedFunction?,
+    )
+
+    private fun addDirectComposeStateConsumer(
+        nodes: MutableMap<String, FlowNode>,
+        edges: MutableSet<FlowEdge>,
+        sourceStateId: String,
+        reference: KtNameReferenceExpression,
+    ): Boolean {
+        val root = enclosingComposeOwner(reference) ?: return false
+        val rootId = root.node.id
+        nodes.putIfAbsent(rootId, root.node)
+        addEdge(
+            edges,
+            FlowEdge(
+                from = sourceStateId,
+                to = rootId,
+                kind = EdgeKind.UPDATES_COMPOSE,
+                label = "Compose state → recompose",
+                source = sourceLocation(reference),
+            ),
+        )
+        addComposableChildrenFromBody(
+            nodes = nodes,
+            edges = edges,
+            body = root.body,
+            functionId = rootId,
+            currentFunction = root.function,
+            depth = 0,
+            visited = root.function?.let { linkedSetOf(it) } ?: linkedSetOf(),
+        )
+        return true
+    }
+
+    private fun addComposeConsumer(
+        nodes: MutableMap<String, FlowNode>,
+        edges: MutableSet<FlowEdge>,
+        path: FlowUsagePath,
+    ): Boolean {
+        val collector = path.stages.lastOrNull() ?: return false
+        if (collector.kind != NodeKind.COLLECTOR) return false
+        val collectorName = collector.label.removeSuffix("*")
+        if (collectorName != "collectAsState" && collectorName != "collectAsStateWithLifecycle") return false
+
+        // A collectAsState* call can live either in a named @Composable or directly in a
+        // Compose host lambda such as ComposeView.setContent { ... } / Activity.setContent { ... }.
+        // Treat both as real Compose consumers so ordinary Fragment/Activity Compose roots are not
+        // silently omitted from the graph.
+        val root = enclosingComposeOwner(collector.anchor) ?: return false
+        val rootId = root.node.id
+        nodes.putIfAbsent(rootId, root.node)
+        addEdge(
+            edges,
+            FlowEdge(
+                from = stageId(collector),
+                to = rootId,
+                kind = EdgeKind.UPDATES_COMPOSE,
+                label = "recompose",
+                source = sourceLocation(collector.anchor),
+            ),
+        )
+
+        addComposableChildrenFromBody(
+            nodes = nodes,
+            edges = edges,
+            body = root.body,
+            functionId = rootId,
+            currentFunction = root.function,
+            depth = 0,
+            visited = root.function?.let { linkedSetOf(it) } ?: linkedSetOf(),
+        )
+        return true
+    }
+
+    private fun addComposableChildren(
+        nodes: MutableMap<String, FlowNode>,
+        edges: MutableSet<FlowEdge>,
+        function: KtNamedFunction,
+        functionId: String,
+        depth: Int,
+        visited: MutableSet<KtNamedFunction>,
+    ) {
+        val body = function.bodyExpression ?: return
+        addComposableChildrenFromBody(
+            nodes = nodes,
+            edges = edges,
+            body = body,
+            functionId = functionId,
+            currentFunction = function,
+            depth = depth,
+            visited = visited,
+        )
+    }
+
+    private fun addComposableChildrenFromBody(
+        nodes: MutableMap<String, FlowNode>,
+        edges: MutableSet<FlowEdge>,
+        body: PsiElement,
+        functionId: String,
+        currentFunction: KtNamedFunction?,
+        depth: Int,
+        visited: MutableSet<KtNamedFunction>,
+    ) {
+        if (depth >= MAX_COMPOSE_CALL_DEPTH || nodes.count { it.value.kind == NodeKind.COMPOSABLE } >= MAX_COMPOSE_NODES) return
+        PsiTreeUtil.collectElementsOfType(body, KtCallExpression::class.java).forEach { call ->
+            ProgressManager.checkCanceled()
+            val target = FlowSemantics.sourceFunction(call) ?: return@forEach
+            if (!FlowSemantics.isComposableFunction(target) || target == currentFunction) return@forEach
+            val childId = composeId(target)
+            nodes.putIfAbsent(childId, composeNode(target))
+            addEdge(
+                edges,
+                FlowEdge(
+                    from = functionId,
+                    to = childId,
+                    kind = EdgeKind.COMPOSES,
+                    label = "composes",
+                    source = sourceLocation(call),
+                ),
+            )
+            if (visited.add(target)) {
+                addComposableChildren(nodes, edges, target, childId, depth + 1, visited)
+            }
+        }
+    }
+
+    private fun enclosingComposeOwner(element: PsiElement): ComposeOwner? {
+        var current: PsiElement? = element
+        while (current != null) {
+            when (current) {
+                is KtNamedFunction -> {
+                    if (FlowSemantics.isComposableFunction(current)) {
+                        val body = current.bodyExpression ?: current
+                        return ComposeOwner(composeNode(current), body, current)
+                    }
+                }
+
+                is KtLambdaExpression -> {
+                    val hostCall = composeHostCall(current)
+                    if (hostCall != null) {
+                        val body = current.bodyExpression ?: current
+                        return ComposeOwner(composeHostNode(current, hostCall), body, null)
+                    }
+                }
+            }
+            current = current.parent
+        }
+        return null
+    }
+
+    /** Returns the Compose root call that owns [lambda], currently the standard setContent APIs. */
+    private fun composeHostCall(lambda: KtLambdaExpression): KtCallExpression? {
+        // For both trailing lambdas (`setContent { ... }`) and parenthesized lambda arguments,
+        // the first call expression above the lambda is the owning call. Keeping this PSI-shape
+        // agnostic avoids depending on whether the parser used KtLambdaArgument or KtValueArgument.
+        val call = PsiTreeUtil.getParentOfType(lambda, KtCallExpression::class.java, true) ?: return null
+        return call.takeIf { it.calleeExpression?.text == "setContent" }
+    }
+
+    private fun composeHostNode(lambda: KtLambdaExpression, hostCall: KtCallExpression): FlowNode {
+        val file = lambda.containingKtFile
+        val ownerFunction = PsiTreeUtil.getParentOfType(lambda, KtNamedFunction::class.java, true)
+        val ownerLabel = ownerFunction?.name?.let { "$it()" } ?: "source"
+        val id = "compose-host:${file.virtualFile.path}:${lambda.textOffset}"
+        return FlowNode(
+            id = id,
+            label = "setContent",
+            detail = "Compose content lambda • $ownerLabel • ${sourceDetail(hostCall)} • live recomposition capable",
+            kind = NodeKind.COMPOSABLE,
+            source = sourceLocation(hostCall),
+            runtimeKey = null,
+            groupKey = id,
+            groupLabel = "setContent",
+            groupKind = NodeGroupKind.COMPOSE,
+        )
+    }
+
+    private fun composeId(function: KtNamedFunction): String =
+        "compose:${function.containingKtFile.virtualFile.path}:${function.textOffset}"
+
+    private fun composeRuntimeKey(function: KtNamedFunction): String {
+        val file = function.containingKtFile
+        val pkg = file.packageFqName.asString()
+        return "@compose|$pkg|${file.name}|${function.name ?: "<anonymous>"}"
+    }
+
+    private fun composeNode(function: KtNamedFunction): FlowNode {
+        val file = function.containingKtFile
+        val name = function.name ?: "<anonymous composable>"
+        return FlowNode(
+            id = composeId(function),
+            label = name,
+            detail = "@Composable • ${sourceDetail(function)} • live composition inspectable",
+            kind = NodeKind.COMPOSABLE,
+            source = sourceLocation(function),
+            runtimeKey = composeRuntimeKey(function),
+            groupKey = "compose:${file.virtualFile.path}:${function.textOffset}",
+            groupLabel = name,
+            groupKind = NodeGroupKind.COMPOSE,
+        )
+    }
+
+
+    private fun looksLikeViewModel(owner: KtClassOrObject): Boolean {
+        val name = owner.name.orEmpty()
+        if (name.endsWith("ViewModel")) return true
+        return owner.superTypeListEntries.any { entry ->
+            val text = entry.text
+            text == "ViewModel" || text.startsWith("ViewModel(") || text.endsWith(".ViewModel") || text.contains("ViewModel(")
+        }
     }
 
     private fun writerOwnerLabel(writer: WriterSemantics): String {
@@ -702,5 +1061,7 @@ class AnalysisApiFlowAnalyzer(private val project: Project) {
         const val MAX_PROJECT_PROPERTIES_TO_INSPECT = 12_000
         const val MAX_ALL_ANALYZED_PROPERTIES = 1_500
         const val MAX_ALL_GRAPH_NODES = 8_000
+        const val MAX_COMPOSE_CALL_DEPTH = 4
+        const val MAX_COMPOSE_NODES = 120
     }
 }

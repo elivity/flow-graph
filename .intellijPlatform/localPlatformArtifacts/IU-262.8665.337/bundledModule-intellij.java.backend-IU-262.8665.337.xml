@@ -1,0 +1,42 @@
+<?xml version='1.1' ?>
+<ivy-module version="2.0">
+  <info organisation="bundledModule" module="intellij.java.backend" revision="IU-262.8665.337" />
+  <configurations>
+    <conf name="default" visibility="public" />
+  </configurations>
+  <publications>
+    <artifact name="intellij.java.backend" ext="jar" conf="default" url="plugins/java/lib/modules" />
+  </publications>
+  <dependencies>
+    <dependency org="bundledPlugin" name="com.intellij.java" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.vcs.impl.lang" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.spellchecker" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.regexp" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.typeMigration" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.manifest" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.analysis.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.codeserver.core" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.codeserver.highlighting" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.compiler" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.compiler.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.debugger" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.execution" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.impl.inspections" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.impl.refactorings" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.indexing" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.indexing.impl" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.uast" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.uast.ide" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.java.ui" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.jvm.analysis" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.jvm.analysis.quickFix" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.jvm.analysis.refactoring" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.backend" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.jps.build.dependencyGraph" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.uast" rev="IU-262.8665.337" />
+    <dependency org="bundledModule" name="intellij.platform.uast.ide" rev="IU-262.8665.337" />
+  </dependencies>
+</ivy-module>
