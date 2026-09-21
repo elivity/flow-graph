@@ -32,7 +32,7 @@ jobs:
       - name: Verify the artifact JitPack will publish
         run: >-
           gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal
-          -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion=${GITHUB_REF_NAME:-0.18.4}
+          -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion=${GITHUB_REF_NAME:-0.18.6}
       - run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
 
   publish-gradle-plugin:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.6
+
+- Fixed the JitPack build environment to use Java 17, matching the runtime toolchain requirement.
+- Bumped current release, installation, publishing, and CI version references to `0.18.6`.
+
 ## 0.18.5
 
 - Fixed Gradle isolated-projects compatibility for the instrumentation included build.

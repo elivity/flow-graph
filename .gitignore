@@ -1,6 +1,5 @@
 .gradle/
-**/build/
+build/
 .flowgraph/
-.idea/
-.intellijPlatform/
-local.properties
+instrumentation/.gradle/
+instrumentation/**/build/
