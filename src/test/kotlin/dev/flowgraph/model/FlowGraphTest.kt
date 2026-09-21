@@ -49,7 +49,10 @@ class FlowGraphTest {
     fun `impact reports transitive affected flow collector and writer`() {
         val impact = sampleGraph().impactFor("selected")!!
 
-        assertEquals(listOf("uiState"), impact.downstreamStates.map { it.label })
+        assertEquals(
+            setOf("_state", "uiState"),
+            impact.downstreamStates.map { it.label }.toSet()
+        )
         assertEquals(listOf("collectAsStateWithLifecycle"), impact.downstreamCollectors.map { it.label })
         assertEquals(listOf("select()"), impact.upstreamWriters.map { it.label })
     }
