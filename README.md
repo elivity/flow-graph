@@ -63,6 +63,16 @@ Flow Graph turns those relationships into a navigable graph and overlays runtime
 
 ---
 
+## Namespace
+
+Flow Graph uses the `com.oskiapps.flowgraph` namespace. The Android instrumentation plugin ID is:
+
+```kotlin
+id("com.oskiapps.flowgraph.instrumentation")
+```
+
+The debug runtime is still distributed through JitPack as `com.github.elivity:flow-graph`, so existing JitPack repository configuration does not change.
+
 ## Installation
 
 Flow Graph has three pieces, each distributed through the normal ecosystem for that component:
@@ -111,11 +121,11 @@ In the Android **application** module:
 // app/build.gradle.kts
 plugins {
     // your existing plugins...
-    id("dev.flowgraph.instrumentation") version "0.18.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.19.0"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.18.6")
+    debugImplementation("com.github.elivity:flow-graph:0.19.0")
 }
 ```
 
@@ -126,18 +136,18 @@ If plugin versions are centralized at the root:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("dev.flowgraph.instrumentation") version "0.18.6" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.19.0" apply false
 }
 ```
 
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("dev.flowgraph.instrumentation")
+    id("com.oskiapps.flowgraph.instrumentation")
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.18.6")
+    debugImplementation("com.github.elivity:flow-graph:0.19.0")
 }
 ```
 
@@ -349,7 +359,7 @@ Test the JitPack-style runtime publication locally:
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.18.6
+  -Pversion=0.19.0
 ```
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).

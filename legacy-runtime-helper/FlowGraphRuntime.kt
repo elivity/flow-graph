@@ -1,6 +1,6 @@
 @file:Suppress("unused")
 
-package dev.flowgraph.runtime
+package com.oskiapps.flowgraph.runtime
 
 import android.util.Base64
 import android.util.Log

@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-group = "dev.flowgraph"
+group = "com.oskiapps.flowgraph"
 version = providers.gradleProperty("flowGraphVersion").get()
 
 repositories {
@@ -35,7 +35,7 @@ intellijPlatform {
             untilBuild = "261.*"
         }
         description = "K2 Analysis API Flow/StateFlow impact graph with Compose propagation, live runtime tracing, UI interaction markers, timeline scrubbing, and live Compose inspection."
-        vendor { name = "Flow Graph" }
+        vendor { name = "OskiApps" }
     }
 
     // After the first Marketplace upload, releases can be published with:

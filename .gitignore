@@ -3,3 +3,6 @@ build/
 .flowgraph/
 instrumentation/.gradle/
 instrumentation/**/build/
+
+# Temporary editor/test files
+*.tmp

@@ -5,7 +5,7 @@ Flow Graph uses three standard distribution channels:
 | Component | Public distribution |
 | --- | --- |
 | Android Studio IDE plugin | JetBrains Marketplace |
-| `dev.flowgraph.instrumentation` | Gradle Plugin Portal |
+| `com.oskiapps.flowgraph.instrumentation` | Gradle Plugin Portal |
 | debug runtime | JitPack from `elivity/flow-graph` |
 
 The repository is MIT licensed. JitPack removes the Maven Central namespace, signing, staging, and GPG-key work for the runtime. JitPack builds a tagged Git commit on demand and serves the artifact from its Maven repository.
@@ -14,15 +14,15 @@ The instrumentation **Gradle plugin stays on the Gradle Plugin Portal intentiona
 
 ## Consumer coordinates
 
-For release `0.18.6`:
+For release `0.19.0`:
 
 ```kotlin
 plugins {
-    id("dev.flowgraph.instrumentation") version "0.18.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.19.0"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.18.6")
+    debugImplementation("com.github.elivity:flow-graph:0.19.0")
 }
 ```
 
@@ -42,7 +42,7 @@ to `dependencyResolutionManagement.repositories`.
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.18.6
+  -Pversion=0.19.0
 ```
 
 ## 1. Runtime release on JitPack
@@ -54,15 +54,15 @@ There is no upload task and no JitPack credential. Push the source to:
 Then create and push a tag matching the public version:
 
 ```bash
-git tag 0.18.6
-git push origin 0.18.6
+git tag 0.19.0
+git push origin 0.19.0
 ```
 
-Open `https://jitpack.io/#elivity/flow-graph`, select `0.18.6`, and click **Get it** once if you want to force the first build immediately. Otherwise the first Gradle dependency request triggers it.
+Open `https://jitpack.io/#elivity/flow-graph`, select `0.19.0`, and click **Get it** once if you want to force the first build immediately. Otherwise the first Gradle dependency request triggers it.
 
 `jitpack.yml` runs only the runtime publication and passes JitPack's `$GROUP`, `$ARTIFACT`, and `$VERSION` values into Gradle, so the produced artifact matches:
 
-`com.github.elivity:flow-graph:0.18.6`
+`com.github.elivity:flow-graph:0.19.0`
 
 ## 2. Publish the Gradle instrumentation plugin
 
@@ -89,7 +89,7 @@ This is what makes the normal consumer syntax work without custom plugin-resolut
 
 ```kotlin
 plugins {
-    id("dev.flowgraph.instrumentation") version "0.18.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.19.0"
 }
 ```
 
@@ -112,5 +112,5 @@ For the first JetBrains Marketplace release, upload the ZIP from `build/distribu
 For each version, use the same version everywhere. A practical order is:
 
 1. push the Git tag and verify the JitPack runtime build;
-2. publish `dev.flowgraph.instrumentation` with the same version;
+2. publish `com.oskiapps.flowgraph.instrumentation` with the same version;
 3. publish the Marketplace plugin with the same version.

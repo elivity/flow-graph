@@ -4,7 +4,7 @@ plugins {
     id("com.gradle.plugin-publish") version "2.2.1"
 }
 
-group = "dev.flowgraph"
+group = "com.oskiapps.flowgraph"
 
 val releasePropertiesFile = layout.projectDirectory.file("../../gradle.properties").asFile
 val releaseProperties = Properties().apply {
@@ -39,8 +39,8 @@ gradlePlugin {
 
     plugins {
         create("flowGraphInstrumentation") {
-            id = "dev.flowgraph.instrumentation"
-            implementationClass = "dev.flowgraph.instrumentation.FlowGraphInstrumentationPlugin"
+            id = "com.oskiapps.flowgraph.instrumentation"
+            implementationClass = "com.oskiapps.flowgraph.instrumentation.FlowGraphInstrumentationPlugin"
             displayName = "Flow Graph Runtime Instrumentation"
             description = "Debug-only Android bytecode instrumentation for Flow Graph runtime tracing."
             tags.set(listOf("android", "kotlin", "flow", "stateflow", "compose", "profiling"))

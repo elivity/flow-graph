@@ -1,7 +1,7 @@
 <idea-plugin>
-    <id>dev.flowgraph.analysisapi.prototype</id>
+    <id>com.oskiapps.flowgraph</id>
     <name>Flow Graph</name>
-    <vendor>Flow Graph</vendor>
+    <vendor>OskiApps</vendor>
 
     <description><![CDATA[
       Visualize Kotlin Flow/StateFlow/SharedFlow and Compose state propagation with K2 Analysis API, live runtime tracing, Compose inspection, UI-interaction markers, and a scrub-able execution timeline.
@@ -22,16 +22,16 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Flow Graph"
                     anchor="right"
-                    factoryClass="dev.flowgraph.ui.FlowGraphToolWindowFactory"
+                    factoryClass="com.oskiapps.flowgraph.ui.FlowGraphToolWindowFactory"
                     canCloseContents="false"/>
-        <projectService serviceImplementation="dev.flowgraph.service.FlowGraphProjectService"/>
-        <projectService serviceImplementation="dev.flowgraph.service.LiveTraceService"/>
-        <projectService serviceImplementation="dev.flowgraph.service.ComposeRenderService"/>
+        <projectService serviceImplementation="com.oskiapps.flowgraph.service.FlowGraphProjectService"/>
+        <projectService serviceImplementation="com.oskiapps.flowgraph.service.LiveTraceService"/>
+        <projectService serviceImplementation="com.oskiapps.flowgraph.service.ComposeRenderService"/>
     </extensions>
 
     <actions>
         <action id="FlowGraph.ShowForCaret"
-                class="dev.flowgraph.action.ShowFlowGraphAction"
+                class="com.oskiapps.flowgraph.action.ShowFlowGraphAction"
                 text="Show Flow Graph"
                 description="Resolve the Flow/StateFlow at the caret with Kotlin Analysis API and visualize its propagation">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>

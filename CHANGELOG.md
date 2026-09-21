@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0
+
+- Moved the public code namespace from `dev.flowgraph` to `com.oskiapps.flowgraph`.
+- Gradle instrumentation plugin ID is now `com.oskiapps.flowgraph.instrumentation`.
+- Android Studio plugin ID is now `com.oskiapps.flowgraph`.
+- Runtime implementation packages and ASM internal names now use `com.oskiapps.flowgraph.runtime`.
+- JitPack runtime coordinates stay `com.github.elivity:flow-graph:0.19.0`; only the Java/Kotlin namespace and plugin IDs changed.
+- Marketplace vendor metadata now uses `OskiApps`.
+
 ## 0.18.6
 
 - Fixed the JitPack build environment to use Java 17, matching the runtime toolchain requirement.

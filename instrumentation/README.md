@@ -20,11 +20,11 @@ dependencyResolutionManagement {
 
 ```kotlin
 plugins {
-    id("dev.flowgraph.instrumentation") version "0.18.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.19.0"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.18.6")
+    debugImplementation("com.github.elivity:flow-graph:0.19.0")
 }
 ```
 
@@ -44,5 +44,5 @@ The Gradle plugin instruments only the Android `debug` variant. The runtime depe
 
 ## Published artifacts
 
-- Gradle plugin ID: `dev.flowgraph.instrumentation` (Gradle Plugin Portal)
-- Runtime: `com.github.elivity:flow-graph:0.18.6` (JitPack)
+- Gradle plugin ID: `com.oskiapps.flowgraph.instrumentation` (Gradle Plugin Portal)
+- Runtime: `com.github.elivity:flow-graph:0.19.0` (JitPack)
