@@ -1,5 +1,5 @@
 jdk:
-  - openjdk21
+  - openjdk17
 
 before_install:
   - sdk install gradle 9.4.1
