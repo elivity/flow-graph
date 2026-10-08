@@ -121,11 +121,11 @@ In the Android **application** module:
 // app/build.gradle.kts
 plugins {
     // your existing plugins...
-    id("com.oskiapps.flowgraph.instrumentation") version "0.19.2"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.0"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.19.2")
+    debugImplementation("com.github.elivity:flow-graph:0.20.0")
 }
 ```
 
@@ -136,7 +136,7 @@ If plugin versions are centralized at the root:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.19.2" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.0" apply false
 }
 ```
 
@@ -147,7 +147,7 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.19.2")
+    debugImplementation("com.github.elivity:flow-graph:0.20.0")
 }
 ```
 
@@ -394,7 +394,7 @@ Test the JitPack-style runtime publication locally:
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.19.2
+  -Pversion=0.20.0
 ```
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).

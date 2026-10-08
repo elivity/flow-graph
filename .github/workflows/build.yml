@@ -22,8 +22,11 @@ jobs:
       - name: Build runtime and Gradle instrumentation plugin
         run: gradle -p instrumentation clean build
       - name: Verify JitPack runtime publication
-        run: >-
-          gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal
-          -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion=0.19.2
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^flowGraphVersion=//p' gradle.properties)"
+          test -n "$VERSION"
+          gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal \
+            -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion="$VERSION"
       - name: Validate Gradle Plugin Portal metadata
         run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
