@@ -56,6 +56,30 @@ class FlowGraphTest {
     }
 
     @Test
+    fun `field impact does not report containing state as derived`() {
+        val graph = sampleGraph()
+        val impact = graph.impactFor("selected")!!
+
+        assertEquals(listOf("uiState"), impact.downstreamStates.map { it.label })
+        assertEquals(
+            setOf("state", "map", "ui", "collect"),
+            graph.reachable("selected", forward = true).minus("selected")
+                .minus("loading"),
+        )
+    }
+
+    @Test
+    fun `state impact retains actual downstream derived states`() {
+        val impact = sampleGraph().impactFor("state")!!
+
+        assertEquals(listOf("uiState"), impact.downstreamStates.map { it.label })
+        assertEquals(
+            listOf("collectAsStateWithLifecycle"),
+            impact.downstreamCollectors.map { it.label },
+        )
+    }
+
+    @Test
     fun `field specific causes exclude unrelated combine inputs`() {
         val graph = FlowGraph(
             rootLabel = "uiState",
