@@ -11,6 +11,8 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
+**Current release: 0.20.2** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
 It combines two views of the same program:
@@ -57,7 +59,7 @@ Flow Graph turns those relationships into a navigable graph and overlays runtime
 - **Runtime timeline** — pause and scrub backward through relevant runtime activity.
 - **UI interaction markers** — touch, key, and scroll interactions appear as bubbles in the timeline so state changes can be correlated with user input.
 - **Compose inspection** — link state to composables and inspect/render live Compose surfaces when geometry is available.
-- **Source navigation** — click graph edges and nodes to jump back to the responsible call site.
+- **Source navigation** — use a node’s square source icon or double-click an edge to open the relevant source without changing node selection.
 - **Large-graph tooling** — search, auto-fit, smooth frame-coalesced zoom-to-cursor, pan, magnifier, recent-activity filtering, and compact focused layouts.
 - **Debug only** — the instrumentation Gradle plugin targets the Android `debug` build type; release variants are not instrumented.
 
@@ -121,11 +123,11 @@ In the Android **application** module:
 // app/build.gradle.kts
 plugins {
     // your existing plugins...
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.0"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.2"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.0")
+    debugImplementation("com.github.elivity:flow-graph:0.20.2")
 }
 ```
 
@@ -136,7 +138,7 @@ If plugin versions are centralized at the root:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.0" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.2" apply false
 }
 ```
 
@@ -147,7 +149,7 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.0")
+    debugImplementation("com.github.elivity:flow-graph:0.20.2")
 }
 ```
 
@@ -184,7 +186,7 @@ With **Show operators** off (the normal architectural view), the state side of e
 
 ### Horizontal or vertical All Flows layout
 
-Use the **Layout** selector in the graph viewport controls to switch each project-overview cluster between **Horizontal** and **Vertical**. The clusters themselves always remain stacked one below another in the same order. Horizontal reads the causal network left-to-right as `upstream Flow/state -> transforms/collectors/writes -> observed state/stage -> Compose`. Vertical transposes that same per-cluster topology into top-to-bottom `Flow/state -> Compose` while keeping node cards upright. Because the same dependency ranks are transposed rather than recomputed as an unrelated layout, branch/fan-in relationships and the right-side cluster navigator stay stable between orientations. Focused/detail graphs intentionally remain horizontal so causal expansion still reads upstream-left and downstream-right.
+When **Circuit** is disabled, use the **Layout** selector in the graph viewport controls to switch each project-overview cluster between **Horizontal** and **Vertical**. The clusters themselves always remain stacked one below another in the same order. Horizontal reads the causal network left-to-right as `upstream Flow/state -> transforms/collectors/writes -> observed state/stage -> Compose`. Vertical transposes that same per-cluster topology into top-to-bottom `Flow/state -> Compose` while keeping node cards upright. Because the same dependency ranks are transposed rather than recomputed as an unrelated layout, branch/fan-in relationships and the right-side cluster navigator stay stable between orientations. Focused/detail graphs intentionally remain horizontal so causal expansion still reads upstream-left and downstream-right.
 
 The graph viewport menu is width-responsive. Visibility filters, zoom/search controls and the layout selector share a wrapping toolbar, so narrowing the IDE/tool window moves controls onto additional rows instead of clipping them or forcing part of the menu off-screen.
 
@@ -194,7 +196,7 @@ The live **UI render** pane is also detail-only. All Flows keeps the graph viewp
 
 Compose topology also follows project lazy-layout DSL helpers that are not themselves `@Composable`. For example, a source helper such as `fun LazyStaggeredGridScope.newsFeed(...) { items(...) { NewsResourceCardExpanded(...) } }` is represented as `LazyVerticalStaggeredGrid -> newsFeed -> items -> NewsResourceCardExpanded`. The helper is static topology only; recomposition counts remain attached to the actual source `@Composable` descendants.
 
-The graph header has three independent visibility checkboxes: **Compose state**, **Coroutine Flow/StateFlow**, and **Compose views**. They apply consistently to both **All Flows** and focused/detail views. Toggling one rebuilds the currently visible graph, re-packs it from scratch, and fits the remaining content to the viewport, so hidden layers never leave empty layout holes or reappear when a node is focused.
+The **View settings** menu contains visibility checkboxes for: **Compose state**, **Coroutine Flow/StateFlow**, and **Compose views**. They apply consistently to both **All Flows** and focused/detail views. Toggling one rebuilds the currently visible graph and re-packs the remaining content, so hidden layers never leave empty layout holes or reappear when a node is focused.
 
 Use **Flow-influenced UI only** as a structural impact lens when you only want Compose nodes that are causally reached by a coroutine `Flow`/`StateFlow`/`SharedFlow`. FlowGraph follows state-to-state propagation (including an intermediate Compose State) to an `UPDATES_COMPOSE` relationship, removes unrelated Compose branches, then rebuilds, re-packs, and fits the graph. Composition alone does not imply Flow influence: children are not retained merely because an observing parent composes them. The filter still works when the **Coroutine Flow/StateFlow** layer itself is hidden, which is useful for a Compose-only list of affected views.
 
@@ -216,7 +218,7 @@ This view is useful when you do not yet know which state is responsible for a be
 
 ### Detail Flow — isolate one causal chain
 
-Click a node to switch into a focused graph. The detail view keeps the selected state and its causal neighborhood visible while removing unrelated graph noise.
+Click a node in the overview to switch into a focused graph. Within the focused graph, clicking another node inspects it without moving the viewport. The detail view keeps the selected state and its causal neighborhood visible while removing unrelated graph noise.
 
 From there you can:
 
@@ -234,7 +236,7 @@ From there you can:
 
 ### Live trace
 
-With **Live** enabled, runtime events are overlaid on the same graph rather than shown in a separate profiler.
+Live-specific controls are hidden until **Live** is enabled. With **Live** enabled, runtime events are overlaid on the same graph rather than shown in a separate profiler.
 
 Depending on configuration, Flow Graph can show:
 
@@ -394,7 +396,7 @@ Test the JitPack-style runtime publication locally:
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.20.0
+  -Pversion=0.20.2
 ```
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).
