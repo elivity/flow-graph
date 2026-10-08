@@ -32,6 +32,17 @@ internal fun FlowGraph.impactFor(nodeId: String): FlowImpact? {
     val node = byId[nodeId] ?: return null
     val downstreamIds = reachable(nodeId, forward = true)
     val upstreamIds = reachable(nodeId, forward = false)
+    // A field belongs to its containing state; that structural FIELD_OF link
+    // does not mean the containing state is a *derived* downstream state.
+    // Keep traversing through it to discover actual downstream consumers.
+    val containingStateIds = if (node.kind == NodeKind.FIELD) {
+        edges.asSequence()
+            .filter { it.from == nodeId && it.kind == EdgeKind.FIELD_OF }
+            .map { it.to }
+            .toSet()
+    } else {
+        emptySet()
+    }
 
     return FlowImpact(
         node = node,
@@ -44,7 +55,7 @@ internal fun FlowGraph.impactFor(nodeId: String): FlowImpact? {
             .mapNotNull { edge -> byId[edge.to]?.let { edge to it } }
             .toList(),
         downstreamStates = downstreamIds.mapNotNull(byId::get)
-            .filter { it.kind == NodeKind.STATE }
+            .filter { it.kind == NodeKind.STATE && it.id !in containingStateIds }
             .sortedBy { it.label },
         downstreamCollectors = downstreamIds.mapNotNull(byId::get)
             .filter { it.kind == NodeKind.COLLECTOR }
