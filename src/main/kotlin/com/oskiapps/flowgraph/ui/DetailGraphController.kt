@@ -84,7 +84,7 @@ internal fun FlowGraphPanel.updateDetailExpansionControls(projected: FlowGraph, 
     val show = selectionFocusActive && id != null && projected.node(id) != null
     expandLeft.isVisible = show
     expandRight.isVisible = show
-    if (!show || id == null) {
+    if (!show) {
         expandLeft.isEnabled = false
         expandRight.isEnabled = false
         return

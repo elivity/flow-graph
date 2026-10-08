@@ -642,7 +642,7 @@ internal fun AnalysisApiFlowAnalyzer.addEdge(edges: MutableSet<FlowEdge>, edge: 
             // null is the normal definite structural case. If the same edge is also discovered
             // through a possible route, keep the definite evidence rather than downgrading it.
             existing.confidence == null || edge.confidence == null -> null
-            else -> existing.confidence ?: edge.confidence
+            else -> existing.confidence
         },
         source = existing.source ?: edge.source,
     )

@@ -114,7 +114,7 @@ class LiveTraceService : Disposable {
                         try {
                             client.use { connection ->
                                 commandWriter = connection.getOutputStream().bufferedWriter(StandardCharsets.UTF_8)
-                                commandWriters += commandWriter!!
+                                commandWriters += commandWriter
                                 connection.getInputStream().bufferedReader(StandardCharsets.UTF_8).useLines { lines ->
                                     lines.forEach { line ->
                                         if (!running.get() || sessionId.get() != session) return@forEach

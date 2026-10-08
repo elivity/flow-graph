@@ -213,7 +213,7 @@ internal object FlowSemantics {
         }
         return analyze(property) {
             val type = property.symbol.returnType as? KaClassType ?: return@analyze "Flow"
-            type.classId?.shortClassName?.asString() ?: "Flow"
+            type.classId.shortClassName.asString()
         }
     }
 
@@ -444,7 +444,7 @@ internal object FlowSemantics {
         val parameterNames = if (implicitIt) listOf("it") else explicitNames
         if (parameterNames.isEmpty()) return TransformShape(emptyList(), emptyList())
 
-        val result = lambda.bodyExpression?.statements?.lastOrNull() as? KtExpression
+        val result = lambda.bodyExpression?.statements?.lastOrNull()
             ?: return TransformShape(parameterNames, emptyList())
         val resultCall = outerCall(result)
         val namedArguments = resultCall?.valueArguments

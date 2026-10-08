@@ -367,7 +367,7 @@ internal fun GraphCanvas.buildComposeLanePlacement(
                     val nextDepth = step.depth + 1
                     val visible = composeVisualsBySource[edge.to].orEmpty()
                     if (visible.isNotEmpty()) {
-                        if (foundDepth == null || nextDepth < foundDepth!!) {
+                        if (foundDepth == null || nextDepth < foundDepth) {
                             foundDepth = nextDepth
                             found.clear()
                         }
