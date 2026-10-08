@@ -32,6 +32,8 @@ internal class RuntimeEventBuffer(private val capacity: Int) {
     fun resetDropped() { dropped.set(0) }
 
     fun clear() {
-        while (poll() != null) Unit
+        while (poll() != null) {
+            // Discard pending events.
+        }
     }
 }
