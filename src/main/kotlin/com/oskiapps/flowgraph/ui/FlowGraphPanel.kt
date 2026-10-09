@@ -327,9 +327,6 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
         toolTipText = "Open the current Compose render at a larger size"
     }
     /** UI render belongs to focused node inspection, never to the All Flows overview. */
-    internal var composePreviewContainer: JPanel? = null
-    internal var detailsContentPane: JPanel? = null
-    internal var graphDetailsSplitPane: JSplitPane? = null
 
     internal var fullGraph: FlowGraph? = null
     /** Full-detail graph currently in scope. The visible graph may be its collapsed state projection. */
@@ -743,59 +740,15 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
             add(graphOverlay, BorderLayout.CENTER)
             add(graphRightRail, BorderLayout.EAST)
         }
-        val detailsScroll = JScrollPane(details)
-        val composePreviewPanel = JPanel(BorderLayout(6, 6)).apply {
-            border = BorderFactory.createCompoundBorder(
-                BorderFactory.createTitledBorder("UI render"),
-                BorderFactory.createEmptyBorder(6, 8, 8, 8),
-            )
-            val heading = JPanel(BorderLayout(6, 0)).apply {
-                isOpaque = false
-                add(composePreviewCount, BorderLayout.WEST)
-                add(JPanel(FlowLayout(FlowLayout.RIGHT, 5, 0)).apply {
-                    isOpaque = false
-                    add(composePreviewRefresh)
-                    add(composePreviewOpen)
-                    add(composePreviewInfo)
-                }, BorderLayout.EAST)
-            }
-            add(heading, BorderLayout.NORTH)
-            add(composePreviewCanvas, BorderLayout.CENTER)
-            add(composePreviewDetails, BorderLayout.SOUTH)
-            minimumSize = Dimension(320, 190)
-            isVisible = false
-        }
-        composePreviewContainer = composePreviewPanel
-        val lowerSide = JPanel(BorderLayout(0, 6)).apply {
-            add(detailsScroll, BorderLayout.CENTER)
-            add(liveDiagnostics, BorderLayout.SOUTH)
-            minimumSize = Dimension(320, 150)
-        }
-        // The UI render occupies the entire sidebar. The former debug/details pane
-        // below it is available only when there is no live UI render.
-        val rightSide = JPanel(java.awt.CardLayout()).apply {
-            isVisible = false
-            preferredSize = Dimension(430, 520)
-            minimumSize = Dimension(320, 300)
-            add(lowerSide, "details")
-            add(composePreviewPanel, "render")
-        }
-        rightSide.preferredSize = Dimension(260, 0)
-        detailsContentPane = rightSide
-        val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, graphWithExpanders, rightSide).apply {
-            resizeWeight = 0.72
-            isContinuousLayout = true
-            dividerSize = 7
-        }
-
-        graphDetailsSplitPane = split
+        // Node details and Compose render sidebar intentionally removed.
+        // Keep the graph as the sole content of the main viewport.
 
         val top = JPanel(BorderLayout()).apply {
             add(header, BorderLayout.NORTH)
         }
 
         val center = JPanel(BorderLayout()).apply {
-            add(split, BorderLayout.CENTER)
+            add(graphWithExpanders, BorderLayout.CENTER)
             add(runtimeTimeline, BorderLayout.SOUTH)
         }
 

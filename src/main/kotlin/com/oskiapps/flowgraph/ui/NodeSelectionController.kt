@@ -29,33 +29,8 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import kotlin.math.max
 
-internal fun FlowGraphPanel.updateComposeRenderPaneVisibility() {
-    val preview = composePreviewContainer ?: return
-    val content = detailsContentPane ?: return
-    val sidebar = graphDetailsSplitPane ?: return
-    val selectedCompose = selectionFocusActive &&
-        selectedNodeId?.let { fullGraph?.node(it)?.kind == NodeKind.COMPOSABLE } == true
-    if (sidebar.rightComponent.isVisible != selectedCompose) {
-        sidebar.rightComponent.isVisible = selectedCompose
-        sidebar.dividerSize = if (selectedCompose) 7 else 0
-        // Set the divider synchronously before scheduling a detail fit. A second,
-        // delayed divider move used to invalidate the viewport after fitting.
-        if (selectedCompose && sidebar.width > 0) {
-            val minimumSidebarWidth = 260
-            sidebar.setDividerLocation((sidebar.width - minimumSidebarWidth)
-                .coerceAtLeast(sidebar.width / 2))
-        }
-        sidebar.revalidate()
-        sidebar.repaint()
-    }
-    val show = selectedCompose && liveTrace.isSelected
-    // Switching cards never changes the graph's viewport or sidebar width.
-    (content.layout as java.awt.CardLayout).show(
-        content, if (show) "render" else "details"
-    )
-    content.revalidate()
-    content.repaint()
-}
+// No right-side inspector: node clicks only affect graph focus/selection.
+internal fun FlowGraphPanel.updateComposeRenderPaneVisibility() = Unit
 
 /**
  * Right-side overview navigation. Cluster labels are deliberately derived from the semantic
@@ -80,9 +55,6 @@ internal fun FlowGraphPanel.selectNode(nodeId: String) {
         updateDetails()
         updateComposePreview()
         canvas.repaint()
-        fullGraph?.node(nodeId)?.takeIf(::isRenderableCompose)?.let { node ->
-            requestComposeRenderingFor(node, force = false)
-        }
         return
     }
     rememberGraphView()
@@ -101,9 +73,6 @@ internal fun FlowGraphPanel.selectNode(nodeId: String) {
     // previous frame's extent.
     val selectedNode = fullGraph?.node(nodeId)
     updateComposePreview()
-    selectedNode?.takeIf { isRenderableCompose(it) }?.let { node ->
-        requestComposeRenderingFor(node, force = false)
-    }
 }
 
 
