@@ -202,6 +202,16 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
             }
         }
     }
+
+    // Draw ports after nodes so that the entry/exit sockets remain legible even
+    // where the edge terminates exactly at the filled node boundary.
+    sceneEdges.forEach { visualEdge ->
+        val producer = layout.bounds[visualEdge.fromVisualId] ?: return@forEach
+        val consumer = layout.bounds[visualEdge.toVisualId] ?: return@forEach
+        if (!isVisible(producer) && !isVisible(consumer)) return@forEach
+        val dimmed = edgeFocus != null && visualEdge !in edgeFocus.edges && visualEdge != edgeFocus.seed
+        drawConnectionPorts(g, visualEdge.source, producer, consumer, dimmed)
+    }
 }
 
 
