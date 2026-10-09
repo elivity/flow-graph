@@ -29,8 +29,22 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import kotlin.math.max
 
-// No right-side inspector: node clicks only affect graph focus/selection.
-internal fun FlowGraphPanel.updateComposeRenderPaneVisibility() = Unit
+/** Only a renderable Compose node in Detail view opens the preview sidebar. */
+internal fun FlowGraphPanel.updateComposeRenderPaneVisibility() {
+    val preview = composePreviewContainer ?: return
+    val split = graphDetailsSplitPane ?: return
+    val show = selectionFocusActive && selectedNodeId?.let { id ->
+        fullGraph?.node(id)?.let { node -> isRenderableCompose(node) }
+    } == true
+    if (preview.isVisible == show) return
+    // Mutate visibility and divider in one EDT pass, then fit only once after layout settles.
+    preview.isVisible = show
+    split.dividerSize = if (show) 7 else 0
+    if (show && split.width > 0) {
+        split.dividerLocation = (split.width - 260).coerceAtLeast(split.width / 2)
+    }
+    split.revalidate()
+}
 
 /**
  * Right-side overview navigation. Cluster labels are deliberately derived from the semantic
@@ -67,11 +81,15 @@ internal fun FlowGraphPanel.selectNode(nodeId: String) {
     updateFieldFocusChoices(nodeId)
     hint.text = "Focused detail • < expands one cause level • > expands one affected level • existing nodes stay anchored"
     renderActive(autoFit = false)
+    updateComposeRenderPaneVisibility()
     scheduleDetailFitAfterLayout()
     // Showing a focused detail view changes both graph geometry and the amount of usable
     // viewport space. Fit after Swing has settled those changes instead of fitting against the
     // previous frame's extent.
     val selectedNode = fullGraph?.node(nodeId)
+    if (selectedNode != null && isRenderableCompose(selectedNode) && liveTrace.isSelected) {
+        requestComposeRenderingFor(selectedNode, force = false)
+    }
     updateComposePreview()
 }
 
