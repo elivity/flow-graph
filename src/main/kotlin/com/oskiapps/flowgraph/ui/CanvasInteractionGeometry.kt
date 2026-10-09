@@ -40,7 +40,7 @@ internal fun GraphCanvas.isInteractiveAt(canvasPoint: Point): Boolean {
 
 
 internal fun GraphCanvas.updateCursor(canvasPoint: Point) {
-    if (panStartOnScreen != null) {
+    if (panStartOnScreen != null || draggedNodeId != null) {
         cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
         return
     }

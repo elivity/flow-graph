@@ -43,6 +43,7 @@ internal class GraphCanvas(
         set(value) {
             cancelPendingWheelZoom()
             field = value
+            manuallyPlacedNodes.clear()
             focusedVisualEdge = null
             cachedLayout = null
             circuitRoutingCache = null
@@ -108,6 +109,12 @@ internal class GraphCanvas(
         set(value) { field = value; repaint() }
 
     internal val boundsById = mutableMapOf<String, Rectangle>()
+    /** Visual-instance positions are local to the loaded graph, never changes to the Flow model. */
+    internal val manuallyPlacedNodes = mutableMapOf<String, Point>()
+    internal var draggedNodeId: String? = null
+    internal var dragNodeOrigin: Point? = null
+    internal var dragStartModel: Point? = null
+    internal var nodeDragged = false
     internal val nodeW = 250
     internal val nodeH = 76
     internal val colGap = 170
@@ -178,10 +185,21 @@ internal class GraphCanvas(
 
     init {
         background = UIManager.getColor("Panel.background")
-        toolTipText = "Wheel to zoom; drag empty canvas (or middle-drag) to pan; click a node to isolate its causal connections; click an edge to highlight its path; use the square icon on a node to open source"
+        toolTipText = "Wheel to zoom; drag nodes to reposition; drag empty canvas (or middle-drag) to pan; click a node to isolate its causal connections; click an edge to highlight its path; use the square icon on a node to open source"
 
         val mouse = object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    val point = toModelPoint(e.point)
+                    val hit = boundsById.entries.firstOrNull { it.value.contains(point) }
+                    if (hit != null && !sourceIconRect(hit.value).contains(point)) {
+                        draggedNodeId = hit.key
+                        dragNodeOrigin = Point(hit.value.location)
+                        dragStartModel = point
+                        nodeDragged = false
+                        return
+                    }
+                }
                 val shouldPan = SwingUtilities.isMiddleMouseButton(e) ||
                     (SwingUtilities.isLeftMouseButton(e) && !isInteractiveAt(e.point))
                 if (!shouldPan) return
@@ -196,6 +214,30 @@ internal class GraphCanvas(
             }
 
             override fun mouseDragged(e: MouseEvent) {
+                val movingId = draggedNodeId
+                if (movingId != null) {
+                    val start = dragStartModel ?: return
+                    val origin = dragNodeOrigin ?: return
+                    val point = toModelPoint(e.point)
+                    val dx = point.x - start.x
+                    val dy = point.y - start.y
+                    if (!nodeDragged && kotlin.math.abs(dx) + kotlin.math.abs(dy) < PAN_DRAG_THRESHOLD) return
+                    if (!nodeDragged) {
+                        nodeDragged = true
+                        onUserViewportInteraction()
+                        cancelPendingWheelZoom()
+                    }
+                    manuallyPlacedNodes[movingId] = Point(
+                        (origin.x + dx).coerceAtLeast(20),
+                        (origin.y + dy).coerceAtLeast(20),
+                    )
+                    cachedLayout = null
+                    circuitRoutingCache = null
+                    cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
+                    repaint()
+                    e.consume()
+                    return
+                }
                 val startScreen = panStartOnScreen ?: return
                 val startView = panStartViewPosition ?: return
                 val viewport = viewport() ?: return
@@ -217,6 +259,16 @@ internal class GraphCanvas(
             }
 
             override fun mouseReleased(e: MouseEvent) {
+                if (draggedNodeId != null) {
+                    suppressNextClick = nodeDragged
+                    draggedNodeId = null
+                    dragNodeOrigin = null
+                    dragStartModel = null
+                    nodeDragged = false
+                    updateCursor(e.point)
+                    e.consume()
+                    return
+                }
                 if (panStartOnScreen == null) return
                 suppressNextClick = panDragged
                 panStartOnScreen = null
