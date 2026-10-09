@@ -89,8 +89,8 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
         isSelected = false
         toolTipText = "Expand framework/dependency Flow nodes instead of collapsing them into boundary clusters"
     }
-    internal val depth = JComboBox(arrayOf("1", "2", "3", "All")).apply {
-        selectedItem = "3"
+    internal val depth = JComboBox(arrayOf("1", "2", "3", "4", "5", "6", "7", "All")).apply {
+        selectedItem = "7"
         toolTipText = "Maximum causal distance shown upstream/downstream from the selected node"
         preferredSize = Dimension(58, preferredSize.height)
     }
@@ -339,8 +339,8 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
     internal var selectionFocusActive: Boolean = false
     internal val navigationHistory = GraphNavigationHistory()
 
-    internal var detailUpstreamDepth: Int? = 3
-    internal var detailDownstreamDepth: Int? = 3
+    internal var detailUpstreamDepth: Int? = 7
+    internal var detailDownstreamDepth: Int? = 7
     internal var runtimeOverlay: RuntimeOverlay = RuntimeOverlay.EMPTY
     internal var historicalRuntimeOverlay: RuntimeOverlay? = null
     internal var historyCursorMillis: Long? = null
@@ -780,6 +780,7 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
             add(lowerSide, "details")
             add(composePreviewPanel, "render")
         }
+        rightSide.preferredSize = Dimension(260, 0)
         detailsContentPane = rightSide
         val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, graphWithExpanders, rightSide).apply {
             resizeWeight = 0.72

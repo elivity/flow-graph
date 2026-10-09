@@ -169,6 +169,48 @@ internal fun FlowGraphPanel.scheduleSettledAutoFit() {
 
 
 
+/**
+ * Fit a newly opened detail graph once, after both the optional Compose sidebar
+ * and the JScrollPane have settled. Subsequent inspection and Live updates do
+ * not schedule a fit. Manual zoom/pan invalidates the pending operation.
+ */
+internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
+    val generation = ++autoFitGeneration
+    var previousWidth = -1
+    var previousHeight = -1
+    var stableSamples = 0
+    var attempts = 0
+    val timer = javax.swing.Timer(100, null)
+    timer.initialDelay = 240
+    timer.addActionListener {
+        if (generation != autoFitGeneration || !selectionFocusActive || !canvas.isShowing) {
+            timer.stop()
+            return@addActionListener
+        }
+        val viewport = SwingUtilities.getAncestorOfClass(JViewport::class.java, canvas)
+            as? JViewport
+        val extent = viewport?.extentSize
+        if (extent == null || extent.width <= 0 || extent.height <= 0) {
+            if (++attempts >= 10) timer.stop()
+            return@addActionListener
+        }
+        if (extent.width == previousWidth && extent.height == previousHeight) stableSamples++
+        else stableSamples = 0
+        previousWidth = extent.width
+        previousHeight = extent.height
+        if (stableSamples >= 1) {
+            timer.stop()
+            // One fit only: never chase scrollbar/layout changes with another fit.
+            if (generation == autoFitGeneration) canvas.fitToViewport()
+        } else if (++attempts >= 10) {
+            timer.stop()
+            // Layout never stabilized; leave the viewport untouched instead of jittering.
+        }
+    }
+    timer.isRepeats = true
+    timer.start()
+}
+
 internal fun FlowGraphPanel.renderActive(
     autoFit: Boolean = false,
     preserveFocusedViewport: Boolean = false,

@@ -38,19 +38,15 @@ internal fun FlowGraphPanel.updateComposeRenderPaneVisibility() {
     if (sidebar.rightComponent.isVisible != selectedCompose) {
         sidebar.rightComponent.isVisible = selectedCompose
         sidebar.dividerSize = if (selectedCompose) 7 else 0
+        // Set the divider synchronously before scheduling a detail fit. A second,
+        // delayed divider move used to invalidate the viewport after fitting.
+        if (selectedCompose && sidebar.width > 0) {
+            val minimumSidebarWidth = 260
+            sidebar.setDividerLocation((sidebar.width - minimumSidebarWidth)
+                .coerceAtLeast(sidebar.width / 2))
+        }
         sidebar.revalidate()
         sidebar.repaint()
-        if (selectedCompose) {
-            SwingUtilities.invokeLater {
-                if (selectionFocusActive && selectedNodeId?.let {
-                        fullGraph?.node(it)?.kind == NodeKind.COMPOSABLE
-                    } == true) {
-                    sidebar.setDividerLocation(
-                        (sidebar.width - 430).coerceAtLeast(sidebar.width / 2)
-                    )
-                }
-            }
-        }
     }
     val show = selectedCompose && liveTrace.isSelected
     // Switching cards never changes the graph's viewport or sidebar width.
@@ -99,6 +95,7 @@ internal fun FlowGraphPanel.selectNode(nodeId: String) {
     updateFieldFocusChoices(nodeId)
     hint.text = "Focused detail • < expands one cause level • > expands one affected level • existing nodes stay anchored"
     renderActive(autoFit = false)
+    scheduleDetailFitAfterLayout()
     // Showing a focused detail view changes both graph geometry and the amount of usable
     // viewport space. Fit after Swing has settled those changes instead of fitting against the
     // previous frame's extent.
