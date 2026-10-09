@@ -138,12 +138,9 @@ internal fun FlowGraphPanel.displayedRuntimeOverlay(): RuntimeOverlay = historic
 
 
 
-internal fun FlowGraphPanel.selectedDepth(): Int? = when (depth.selectedItem?.toString()) {
-    "1" -> 1
-    "2" -> 2
-    "3" -> 3
-    else -> null
-}
+internal fun FlowGraphPanel.selectedDepth(): Int? =
+    depth.selectedItem?.toString()?.toIntOrNull()
+
 
 
 
