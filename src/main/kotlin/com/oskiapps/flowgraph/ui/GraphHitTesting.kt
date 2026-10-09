@@ -54,19 +54,25 @@ internal fun GraphCanvas.findEdgeAt(model: FlowGraph, point: Point): VisualEdge?
 
 
 
-internal fun GraphCanvas.pointToPolylineDistance(px: Double, py: Double, points: List<Point>): Double {
+internal fun GraphCanvas.pointToPolylineDistance(px: Double, py: Double, points: List<Point>): Double =
+    routedPolylineDistance(px, py, points)
+
+/** Pure geometry shared by routed edge hit-testing and regression tests. */
+internal fun routedPolylineDistance(px: Double, py: Double, points: List<Point>): Double {
     if (points.size < 2) return Double.MAX_VALUE
     var best = Double.MAX_VALUE
     for (i in 0 until points.lastIndex) {
         val a = points[i]
         val b = points[i + 1]
-        val distance = pointToSegmentDistance(px, py, a.x.toDouble(), a.y.toDouble(), b.x.toDouble(), b.y.toDouble())
+        val dx = (b.x - a.x).toDouble()
+        val dy = (b.y - a.y).toDouble()
+        val t = if (dx == 0.0 && dy == 0.0) 0.0 else
+            (((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)).coerceIn(0.0, 1.0)
+        val distance = kotlin.math.hypot(px - a.x - t * dx, py - a.y - t * dy)
         if (distance < best) best = distance
     }
     return best
 }
-
-
 
 internal fun GraphCanvas.pointToSegmentDistance(px: Double, py: Double, x1: Double, y1: Double, x2: Double, y2: Double): Double {
     val dx = x2 - x1
