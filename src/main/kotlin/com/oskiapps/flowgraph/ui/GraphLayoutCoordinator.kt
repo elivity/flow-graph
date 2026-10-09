@@ -44,14 +44,29 @@ import kotlin.math.max
 internal fun GraphCanvas.layoutNodes(model: FlowGraph): NodeLayout {
     val hadFrozenLayout = frozenLayout != null
     val raw = layoutNodesUnoriented(model)
-    if (hadFrozenLayout) return raw
-    if (circuitViewEnabled) return layoutCircuitLayers(raw, model)
-    val projectOverview = selectedId == null && isAllProjectFlows(model.rootLabel)
-    return if (projectOverviewVertical && projectOverview) {
-        verticalizeProjectOverview(raw)
-    } else {
-        raw
+    val positioned = when {
+        hadFrozenLayout -> raw
+        circuitViewEnabled -> layoutCircuitLayers(raw, model)
+        projectOverviewVertical && selectedId == null && isAllProjectFlows(model.rootLabel) -> verticalizeProjectOverview(raw)
+        else -> raw
     }
+    return applyManualNodePositions(positioned)
+}
+
+/** Keep routing and rendering on identical bounds after a drag. */
+internal fun GraphCanvas.applyManualNodePositions(layout: NodeLayout): NodeLayout {
+    if (manuallyPlacedNodes.isEmpty()) return layout
+    val adjusted = layout.bounds.mapValues { (id, bounds) ->
+        manuallyPlacedNodes[id]?.let { position -> placedNodeBounds(bounds, position) }
+            ?: bounds
+    }
+    val maxRight = adjusted.values.maxOfOrNull { it.x + it.width + 80 } ?: 1
+    val maxBottom = adjusted.values.maxOfOrNull { it.y + it.height + 80 } ?: 1
+    return layout.copy(
+        bounds = adjusted,
+        preferredSize = Dimension(maxOf(layout.preferredSize.width, maxRight),
+            maxOf(layout.preferredSize.height, maxBottom)),
+    )
 }
 
 /**
@@ -368,3 +383,7 @@ internal fun GraphCanvas.layoutNodesUnoriented(model: FlowGraph): NodeLayout {
  */
 
 
+
+/** Relocate a visual node without changing its dimensions or graph identity. */
+internal fun placedNodeBounds(original: Rectangle, position: Point): Rectangle =
+    Rectangle(position.x, position.y, original.width, original.height)
