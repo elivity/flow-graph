@@ -42,20 +42,9 @@ internal fun GraphCanvas.findEdgeAt(model: FlowGraph, point: Point): VisualEdge?
         .mapNotNull { visualEdge ->
             val a = layout.bounds[visualEdge.fromVisualId] ?: return@mapNotNull null
             val b = layout.bounds[visualEdge.toVisualId] ?: return@mapNotNull null
-            val hasRepeatedVisualInstances = layout.sourceNodeIdByVisualId.any { (visualId, sourceId) ->
-                visualId != sourceId
-            }
-            val points = if (!hasRepeatedVisualInstances) {
-                edgeRoute(visualEdge.source) ?: run {
-                    val line = edgeLineFromBounds(visualEdge.source, a, b)
-                    listOf(Point(line.x1, line.y1), Point(line.x2, line.y2))
-                }
-            } else if (circuitViewEnabled) {
-                buildSingleCircuitRoute(visualEdge.source, a, b, laneOffset = 0)
-            } else {
-                val line = edgeLineFromBounds(visualEdge.source, a, b)
-                listOf(Point(line.x1, line.y1), Point(line.x2, line.y2))
-            }
+            // Hit-test the exact routed polyline used by EdgeRenderer.drawArrow.
+            // A straight/canonical route does not correspond to the visible bends.
+            val points = nodeAvoidingRoute(visualEdge.source, a, b)
             visualEdge to pointToPolylineDistance(point.x.toDouble(), point.y.toDouble(), points)
         }
         .filter { (_, distance) -> distance <= EDGE_HIT_DISTANCE / zoom }
