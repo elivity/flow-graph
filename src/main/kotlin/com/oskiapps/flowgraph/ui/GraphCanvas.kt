@@ -109,6 +109,9 @@ internal class GraphCanvas(
         set(value) { field = value; repaint() }
 
     internal val boundsById = mutableMapOf<String, Rectangle>()
+    internal var obstacleRouteLayout: NodeLayout? = null
+    internal val obstacleRouteCache = mutableMapOf<String, List<Point>>()
+
     /** Visual-instance positions are local to the loaded graph, never changes to the Flow model. */
     internal val manuallyPlacedNodes = mutableMapOf<String, Point>()
     internal var draggedNodeId: String? = null
