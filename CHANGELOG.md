@@ -1,3 +1,10 @@
+## 0.20.3 — Compose preview and detail viewport stability
+
+- Restore the compact Compose render sidebar when an inspectable Compose UI node is selected.
+- Keep the removed verbose node-debug inspector hidden.
+- Wait for stable viewport and sidebar dimensions before fitting a newly entered detail graph once, reducing offset and jitter.
+- Preserve manual camera interaction and in-place selection within detail view.
+
 ## Runtime Flow/state dependency graph
 
 - **Runtime branches only** now retains the causal coroutine graph instead of projecting runtime activity down to StateFlow boxes before filtering. Active/connector `STATE`, `OPERATOR`, `COLLECTOR`, `BEHAVIOR`, `EXPOSURE` and `WRITER` nodes remain visible.
