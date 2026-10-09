@@ -14,15 +14,15 @@ The instrumentation **Gradle plugin stays on the Gradle Plugin Portal intentiona
 
 ## Consumer coordinates
 
-For release `0.20.3`:
+For release `0.20.4`:
 
 ```kotlin
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.3"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.4"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.3")
+    debugImplementation("com.github.elivity:flow-graph:0.20.4")
 }
 ```
 
@@ -42,7 +42,7 @@ to `dependencyResolutionManagement.repositories`.
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.20.3
+  -Pversion=0.20.4
 ```
 
 ## 1. Runtime release on JitPack
@@ -54,15 +54,15 @@ There is no upload task and no JitPack credential. Push the source to:
 Then create and push a tag matching the public version:
 
 ```bash
-git tag 0.20.3
-git push origin 0.20.3
+git tag 0.20.4
+git push origin 0.20.4
 ```
 
-Open `https://jitpack.io/#elivity/flow-graph`, select `0.20.3`, and click **Get it** once if you want to force the first build immediately. Otherwise the first Gradle dependency request triggers it.
+Open `https://jitpack.io/#elivity/flow-graph`, select `0.20.4`, and click **Get it** once if you want to force the first build immediately. Otherwise the first Gradle dependency request triggers it.
 
 `jitpack.yml` runs only the runtime publication and passes JitPack's `$GROUP`, `$ARTIFACT`, and `$VERSION` values into Gradle, so the produced artifact matches:
 
-`com.github.elivity:flow-graph:0.20.3`
+`com.github.elivity:flow-graph:0.20.4`
 
 ## 2. Publish the Gradle instrumentation plugin
 
@@ -89,7 +89,7 @@ This is what makes the normal consumer syntax work without custom plugin-resolut
 
 ```kotlin
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.3"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.4"
 }
 ```
 

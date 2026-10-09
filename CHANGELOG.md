@@ -1,3 +1,9 @@
+## 0.20.4 — Detail-view regression coverage and release consistency
+
+- Document the recent Detail view fitting, Compose render sidebar, and navigation behavior with references to their feature commits.
+- Add CI regression checks to keep release documentation and publishing workflows aligned with the root version.
+- Preserve stable node inspection and the existing Compose preview behavior from 0.20.3.
+
 ## 0.20.3 — Compose preview and detail viewport stability
 
 - Restore the compact Compose render sidebar when an inspectable Compose UI node is selected.
