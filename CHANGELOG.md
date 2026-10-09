@@ -1,3 +1,8 @@
+## 0.20.5 — Initial overview auto-fit
+
+- Fit the newly loaded all-flows graph once, after its viewport dimensions stabilize.
+- Cancel pending fit on manual interaction or detail navigation, avoiding live-update camera jumps.
+
 ## 0.20.4 — Detail-view regression coverage and release consistency
 
 - Document the recent Detail view fitting, Compose render sidebar, and navigation behavior with references to their feature commits.
