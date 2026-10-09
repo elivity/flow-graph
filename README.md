@@ -11,7 +11,7 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
-**Current release: 0.20.2** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+**Current release: 0.20.3** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
 
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
@@ -123,11 +123,11 @@ In the Android **application** module:
 // app/build.gradle.kts
 plugins {
     // your existing plugins...
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.2"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.3"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.2")
+    debugImplementation("com.github.elivity:flow-graph:0.20.3")
 }
 ```
 
@@ -138,7 +138,7 @@ If plugin versions are centralized at the root:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.2" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.3" apply false
 }
 ```
 
@@ -149,7 +149,7 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.2")
+    debugImplementation("com.github.elivity:flow-graph:0.20.3")
 }
 ```
 
@@ -396,7 +396,7 @@ Test the JitPack-style runtime publication locally:
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.20.2
+  -Pversion=0.20.3
 ```
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).
