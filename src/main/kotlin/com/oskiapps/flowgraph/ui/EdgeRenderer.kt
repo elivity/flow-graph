@@ -45,20 +45,9 @@ internal fun GraphCanvas.drawArrow(
     interCluster: Boolean,
     pathStyle: EdgePathStyle,
 ) {
-    val hasRepeatedVisualInstances = cachedLayout?.sourceNodeIdByVisualId?.any { (visualId, sourceId) ->
-        visualId != sourceId
-    } == true
-    val points = if (!hasRepeatedVisualInstances) {
-        edgeRoute(edge) ?: run {
-            val line = edgeLineFromBounds(edge, a, b)
-            listOf(Point(line.x1, line.y1), Point(line.x2, line.y2))
-        }
-    } else if (circuitViewEnabled) {
-        buildSingleCircuitRoute(edge, a, b, laneOffset = 0)
-    } else {
-        val line = edgeLineFromBounds(edge, a, b)
-        listOf(Point(line.x1, line.y1), Point(line.x2, line.y2))
-    }
+    // Use actual visual bounds; canonical IDs can have multiple visual instances.
+    // Cache by the current layout identity, not by model edge alone.
+    val points = nodeAvoidingRoute(edge, a, b)
     val oldStroke = g.stroke
     val normal = UIManager.getColor("Label.foreground") ?: Color.DARK_GRAY
 
