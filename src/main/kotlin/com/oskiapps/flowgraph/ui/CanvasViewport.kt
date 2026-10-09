@@ -324,9 +324,6 @@ internal fun GraphCanvas.updateScaledPreferredSize() {
             oldViewPosition.y + deltaPaddingY,
         )
         viewport.viewPosition = target
-        SwingUtilities.invokeLater {
-            viewport.viewPosition = clampViewPosition(viewport, target.x, target.y)
-        }
     }
 }
 

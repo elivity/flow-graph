@@ -178,10 +178,11 @@ internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
     val generation = ++autoFitGeneration
     var previousWidth = -1
     var previousHeight = -1
+    var previousDivider = -1
     var stableSamples = 0
     var attempts = 0
     val timer = javax.swing.Timer(100, null)
-    timer.initialDelay = 240
+    timer.initialDelay = 350
     timer.addActionListener {
         if (generation != autoFitGeneration || !selectionFocusActive || !canvas.isShowing) {
             timer.stop()
@@ -191,18 +192,25 @@ internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
             as? JViewport
         val extent = viewport?.extentSize
         if (extent == null || extent.width <= 0 || extent.height <= 0) {
-            if (++attempts >= 10) timer.stop()
+            if (++attempts >= 18) timer.stop()
             return@addActionListener
         }
-        if (extent.width == previousWidth && extent.height == previousHeight) stableSamples++
+        val divider = graphDetailsSplitPane?.dividerLocation ?: -1
+        if (extent.width == previousWidth && extent.height == previousHeight && divider == previousDivider) stableSamples++
         else stableSamples = 0
         previousWidth = extent.width
         previousHeight = extent.height
-        if (stableSamples >= 1) {
+        previousDivider = divider
+        if (stableSamples >= 2) {
             timer.stop()
             // One fit only: never chase scrollbar/layout changes with another fit.
-            if (generation == autoFitGeneration) canvas.fitToViewport()
-        } else if (++attempts >= 10) {
+            if (generation == autoFitGeneration) {
+                val pane = SwingUtilities.getAncestorOfClass(JScrollPane::class.java, canvas) as? JScrollPane
+                pane?.doLayout()
+                viewport?.doLayout()
+                canvas.fitToViewport()
+            }
+        } else if (++attempts >= 18) {
             timer.stop()
             // Layout never stabilized; leave the viewport untouched instead of jittering.
         }

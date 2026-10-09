@@ -326,6 +326,8 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
         isEnabled = false
         toolTipText = "Open the current Compose render at a larger size"
     }
+    internal var composePreviewContainer: JPanel? = null
+    internal var graphDetailsSplitPane: JSplitPane? = null
     /** UI render belongs to focused node inspection, never to the All Flows overview. */
 
     internal var fullGraph: FlowGraph? = null
@@ -740,15 +742,44 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
             add(graphOverlay, BorderLayout.CENTER)
             add(graphRightRail, BorderLayout.EAST)
         }
-        // Node details and Compose render sidebar intentionally removed.
-        // Keep the graph as the sole content of the main viewport.
+        // The sidebar is exclusively a Compose UI preview; there is no node-debug panel.
+        val previewPanel = JPanel(BorderLayout(6, 6)).apply {
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder("UI render"),
+                BorderFactory.createEmptyBorder(6, 8, 8, 8),
+            )
+            val heading = JPanel(BorderLayout(6, 0)).apply {
+                isOpaque = false
+                add(composePreviewCount, BorderLayout.WEST)
+                add(JPanel(FlowLayout(FlowLayout.RIGHT, 5, 0)).apply {
+                    isOpaque = false
+                    add(composePreviewRefresh)
+                    add(composePreviewOpen)
+                    add(composePreviewInfo)
+                }, BorderLayout.EAST)
+            }
+            add(heading, BorderLayout.NORTH)
+            add(composePreviewCanvas, BorderLayout.CENTER)
+            // Optional preview diagnostics remain behind the info toggle.
+            add(composePreviewDetails, BorderLayout.SOUTH)
+            minimumSize = Dimension(220, 160)
+            preferredSize = Dimension(260, 400)
+            isVisible = false
+        }
+        composePreviewContainer = previewPanel
+        val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, graphWithExpanders, previewPanel).apply {
+            resizeWeight = 1.0
+            isContinuousLayout = false
+            dividerSize = 0
+        }
+        graphDetailsSplitPane = split
 
         val top = JPanel(BorderLayout()).apply {
             add(header, BorderLayout.NORTH)
         }
 
         val center = JPanel(BorderLayout()).apply {
-            add(graphWithExpanders, BorderLayout.CENTER)
+            add(split, BorderLayout.CENTER)
             add(runtimeTimeline, BorderLayout.SOUTH)
         }
 
