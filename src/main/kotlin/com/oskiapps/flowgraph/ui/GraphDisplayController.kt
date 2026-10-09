@@ -136,7 +136,8 @@ internal fun FlowGraphPanel.setGraph(graph: FlowGraph) {
         }
     }
     historyCursorMillis?.let { onTimelineScrubbed(it) }
-    // Preserve the camera on graph updates; Fit is always explicit.
+    // A newly loaded overview gets one settled fit; live updates do not refit.
+    if (!selectionFocusActive) scheduleSettledAutoFit()
 }
 
 
@@ -164,7 +165,35 @@ internal fun FlowGraphPanel.cancelPendingAutoFit() {
 
 
 internal fun FlowGraphPanel.scheduleSettledAutoFit() {
-    // Never override manual zoom/pan; user can press Fit explicitly.
+    val generation = ++autoFitGeneration
+    var previousExtent: Dimension? = null
+    var stableSamples = 0
+    var attempts = 0
+    val timer = javax.swing.Timer(100, null)
+    timer.initialDelay = 250
+    timer.addActionListener {
+        if (generation != autoFitGeneration || selectionFocusActive) {
+            timer.stop()
+            return@addActionListener
+        }
+        val viewport = SwingUtilities.getAncestorOfClass(JViewport::class.java, canvas) as? JViewport
+        val extent = viewport?.extentSize
+        if (canvas.isShowing && extent != null && extent.width > 0 && extent.height > 0) {
+            stableSamples = if (extent == previousExtent) stableSamples + 1 else 0
+            previousExtent = Dimension(extent)
+            if (stableSamples >= 2) {
+                timer.stop()
+                if (generation == autoFitGeneration && !selectionFocusActive) {
+                    (SwingUtilities.getAncestorOfClass(JScrollPane::class.java, canvas) as? JScrollPane)?.doLayout()
+                    viewport?.doLayout()
+                    canvas.fitToViewport()
+                }
+                return@addActionListener
+            }
+        }
+        if (++attempts >= 30) timer.stop()
+    }
+    timer.start()
 }
 
 
