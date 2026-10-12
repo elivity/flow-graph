@@ -21,10 +21,36 @@ class ReleaseVersionConsistencyTest {
         releaseDocs.forEach { filename ->
             val text = Files.readString(Path.of(filename))
             assertTrue(version in text, "$filename must mention release $version")
-            // The full release references must not lag behind the project version.
-            val oldVersions = Regex("0\\.20\\.\\d+").findAll(text).map { it.value }.toSet() - version
-            assertTrue(oldVersions.isEmpty(), "$filename has stale version references: $oldVersions")
+            // A previous release may be named when describing when support began;
+            // Release commands, plugin versions, and dependencies must be current.
+            val oldVersions = staleReleaseVersions(text, version)
+            assertTrue(oldVersions.isEmpty(),
+                "$filename has stale version references: $oldVersions")
         }
+    }
+
+    @Test
+    fun `historical compatibility notes do not mask stale installation versions`() {
+        val current = "0.20.10"
+        assertTrue(staleReleaseVersions(
+            "Flow Graph `0.20.9` and later support Rabbit 1.", current
+        ).isEmpty())
+        assertTrue("0.20.9" in staleReleaseVersions(
+            "id(\"com.oskiapps.flowgraph.instrumentation\") version \"0.20.9\"", current
+        ))
+        assertTrue("0.20.9" in staleReleaseVersions(
+            "com.github.elivity.flow-graph:flowgraph-runtime:0.20.9", current
+        ))
+    }
+
+    private fun staleReleaseVersions(text: String, current: String): Set<String> {
+        // Documentation may legitimately explain that a feature arrived in an older
+        // version (e.g. "Flow Graph `0.20.9` and later"). Exclude only this precise
+        // historical form, not stale versions in installation or publishing snippets.
+        val historicalNote = Regex("Flow Graph `0\\.20\\.\\d+` and later")
+        val instructions = historicalNote.replace(text, "")
+        return Regex("0\\.20\\.\\d+").findAll(instructions)
+            .map { it.value }.toSet() - current
     }
 
     @Test
