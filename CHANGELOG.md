@@ -1,3 +1,9 @@
+## 0.20.6 — Client live-tracing permission documentation
+
+- Explain why the Android client needs `android.permission.INTERNET` for local TCP-based Live tracing, even without external Internet access.
+- Document a debug-only manifest declaration and clarify that the permission is not required for static graph analysis.
+- Include the previous fixes for stable wheel zoom anchoring, semantic Compose-state connections, and graph edge correctness.
+
 ## 0.20.5 — Initial overview auto-fit
 
 - Fit the newly loaded all-flows graph once, after its viewport dimensions stabilize.
