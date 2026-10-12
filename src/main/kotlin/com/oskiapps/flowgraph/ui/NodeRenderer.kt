@@ -159,6 +159,28 @@ internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle) {
     }
     g.color = color
     fillNodeShape(g, node, r)
+    // Text, badges and tiny source icons are subpixel in a zoomed-out overview.
+    // Preserve node colors and meaningful focus/live/search outlines instead.
+    if (zoom < 0.32) {
+        val oldStroke = g.stroke
+        if (focusedVisualEdge == null && node.id == selectedId) {
+            g.color = UIManager.getColor("Focus.color") ?: Color.WHITE
+            g.stroke = BasicStroke(3f)
+            drawNodeShapeOutline(g, node, r, inset = 2)
+        }
+        if (hasRuntimeActivity(node.id)) {
+            g.color = Color(70, 205, 205)
+            g.stroke = BasicStroke(3f)
+            drawNodeShapeOutline(g, node, r, inset = 3)
+        }
+        if (searchQuery.isNotBlank() && nodeMatchesSearch(node)) {
+            g.color = Color(255, 205, 82)
+            g.stroke = BasicStroke(3f)
+            drawNodeShapeOutline(g, node, r, inset = 5)
+        }
+        g.stroke = oldStroke
+        return
+    }
     if (isComposeStateNode(node)) drawComposeStateBadge(g, r, overviewCompact, node.source != null)
 
     // Compose nodes show only compact live-inspection status on the graph itself. The actual

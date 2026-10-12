@@ -38,6 +38,7 @@ internal fun GraphCanvas.findEdgeAt(model: FlowGraph, point: Point): VisualEdge?
     } else {
         model.edges.asSequence().map { edge -> VisualEdge(edge.from, edge.to, edge) }
     }
+    val threshold = EDGE_HIT_DISTANCE / zoom
     return sceneEdges
         .mapNotNull { visualEdge ->
             val a = layout.bounds[visualEdge.fromVisualId] ?: return@mapNotNull null
@@ -45,9 +46,16 @@ internal fun GraphCanvas.findEdgeAt(model: FlowGraph, point: Point): VisualEdge?
             // Hit-test the exact routed polyline used by EdgeRenderer.drawArrow.
             // A straight/canonical route does not correspond to the visible bends.
             val points = nodeAvoidingRoute(visualEdge.source, a, b)
+            val bounds = routedPolylineBounds(points) ?: return@mapNotNull null
+            val tolerance = kotlin.math.ceil(threshold).toInt().coerceAtMost(100_000)
+            if (point.x.toLong() < bounds.x.toLong() - tolerance ||
+                point.x.toLong() > bounds.x.toLong() + bounds.width + tolerance ||
+                point.y.toLong() < bounds.y.toLong() - tolerance ||
+                point.y.toLong() > bounds.y.toLong() + bounds.height + tolerance
+            ) return@mapNotNull null
             visualEdge to pointToPolylineDistance(point.x.toDouble(), point.y.toDouble(), points)
         }
-        .filter { (_, distance) -> distance <= EDGE_HIT_DISTANCE / zoom }
+        .filter { (_, distance) -> distance <= threshold }
         .minByOrNull { (_, distance) -> distance }
         ?.first
 }

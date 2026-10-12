@@ -33,4 +33,21 @@ class NodeAvoidingEdgeRouterTest {
         ))
         assertEquals(listOf(Point(80, 30), Point(220, 30)), path)
     }
+    @Test
+    fun `fast orthogonal route avoids unrelated obstacle`() {
+        val source = Rectangle(0, 0, 80, 60)
+        val destination = Rectangle(250, 120, 80, 60)
+        val blocker = Rectangle(160, 35, 45, 40)
+        val path = assertNotNull(routeAroundNodes(
+            Point(80, 30), Point(250, 150), listOf(source, blocker, destination), source, destination
+        ))
+        assertEquals(Point(80, 30), path.first())
+        assertEquals(Point(250, 150), path.last())
+        path.zipWithNext().forEach { (a, b) ->
+            assertTrue(a.x == b.x || a.y == b.y)
+            assertTrue(!Rectangle(blocker).apply { grow(8, 8) }
+                .intersectsLine(a.x.toDouble(), a.y.toDouble(), b.x.toDouble(), b.y.toDouble()))
+        }
+    }
+
 }

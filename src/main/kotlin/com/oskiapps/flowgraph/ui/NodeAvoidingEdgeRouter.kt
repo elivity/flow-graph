@@ -25,6 +25,35 @@ internal fun routeAroundNodes(
         .map { Rectangle(it).apply { grow(clearance, clearance) } }
         .filter { it.x <= maxX && it.x + it.width >= minX && it.y <= maxY && it.y + it.height >= minY }
         .toList()
+    // Most dependencies need no maze search: a straight line or short orthogonal
+    // detour is clear. Validate every segment against the same expanded obstacles
+    // used by the full search before taking this fast path.
+    fun blocked(a: Point, b: Point): Boolean = obstacles.any { r ->
+        if (a.y == b.y) a.y in r.y..(r.y + r.height) &&
+            maxOf(a.x, b.x) >= r.x && minOf(a.x, b.x) <= r.x + r.width
+        else a.x in r.x..(r.x + r.width) &&
+            maxOf(a.y, b.y) >= r.y && minOf(a.y, b.y) <= r.y + r.height
+    }
+    val midX = start.x + (end.x - start.x) / 2
+    val shortcuts = listOf(
+        listOf(start, end).takeIf { start.x == end.x || start.y == end.y },
+        listOf(start, Point(midX, start.y), Point(midX, end.y), end),
+        listOf(start, Point(end.x, start.y), end),
+        listOf(start, Point(start.x, end.y), end),
+    )
+    shortcuts.filterNotNull().firstOrNull { path ->
+        path.zipWithNext().all { (a, b) -> !blocked(a, b) }
+    }?.let { path ->
+        val compact = path.filterIndexed { index, point ->
+            index == 0 || point != path[index - 1]
+        }
+        return compact.filterIndexed { index, point ->
+            index == 0 || index == compact.lastIndex ||
+                !(compact[index - 1].x == point.x && point.x == compact[index + 1].x ||
+                    compact[index - 1].y == point.y && point.y == compact[index + 1].y)
+        }
+    }
+
     val xs = (listOf(start.x, end.x, minX, maxX) + obstacles.flatMap {
         listOf(it.x - 2, it.x + it.width + 2)
     }).distinct().sorted()
@@ -34,12 +63,6 @@ internal fun routeAroundNodes(
     val width = xs.size
     val height = ys.size
     fun id(x: Int, y: Int) = y * width + x
-    fun blocked(a: Point, b: Point): Boolean = obstacles.any { r ->
-        if (a.y == b.y) a.y in r.y..(r.y + r.height) &&
-            maxOf(a.x, b.x) >= r.x && minOf(a.x, b.x) <= r.x + r.width
-        else a.x in r.x..(r.x + r.width) &&
-            maxOf(a.y, b.y) >= r.y && minOf(a.y, b.y) <= r.y + r.height
-    }
     val startId = id(xs.indexOf(start.x), ys.indexOf(start.y))
     val endId = id(xs.indexOf(end.x), ys.indexOf(end.y))
     val total = width * height
