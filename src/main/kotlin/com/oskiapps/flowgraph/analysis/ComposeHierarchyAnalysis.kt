@@ -158,7 +158,7 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
                 from = parentVisual?.node?.id ?: functionId,
                 to = visual.node.id,
                 kind = EdgeKind.COMPOSES,
-                label = "composes",
+                label = "calls (static, may be conditional)",
                 source = sourceLocation(visual.call),
             ),
         )

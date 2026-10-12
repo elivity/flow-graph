@@ -235,7 +235,7 @@ internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle) {
             }
         } else {
             val badgeText = buildString {
-                if (runtimeCount > 0) append(if (node.kind == NodeKind.COMPOSABLE) "recompose ×$runtimeCount" else "emit ×$runtimeCount")
+                if (runtimeCount > 0) append(if (node.kind == NodeKind.COMPOSABLE) "compose invocation ×$runtimeCount" else "emit ×$runtimeCount")
                 if (runtimeChanges > 0) { if (isNotEmpty()) append(" • "); append("change ×$runtimeChanges") }
                 if (runtimeDeliveries > 0) { if (isNotEmpty()) append(" • "); append("deliver ×$runtimeDeliveries") }
                 if (runtimeCollections > 0) { if (isNotEmpty()) append(" • "); append("collect ×$runtimeCollections") }

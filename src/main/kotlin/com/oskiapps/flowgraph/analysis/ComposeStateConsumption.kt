@@ -14,6 +14,7 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.oskiapps.flowgraph.model.*
+import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.ComposeOwner
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
@@ -26,6 +27,7 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtProperty
+import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import java.util.ArrayDeque
 
 internal fun AnalysisApiFlowAnalyzer.delegatedComposeStateAccessKeys(
@@ -73,23 +75,84 @@ internal fun AnalysisApiFlowAnalyzer.delegatedAccessKind(reference: KtNameRefere
 
 
 
+/**
+ * Static evidence is deliberately not treated as an observed recomposition.
+ * Collecting a State<T> alone does not read its value during composition.
+ */
+internal enum class ComposeValueReadEvidence { VALUE_READ, UNVERIFIED }
+
+internal fun composeDependencyLabel(
+    evidence: ComposeValueReadEvidence,
+    collected: Boolean = false,
+): String = when (evidence) {
+    ComposeValueReadEvidence.VALUE_READ -> "Compose State value read (can invalidate)"
+    ComposeValueReadEvidence.UNVERIFIED -> if (collected) {
+        "State collected (value read not verified)"
+    } else {
+        "Compose State referenced (value read not verified)"
+    }
+}
+
+internal fun composeDependencyConfidence(evidence: ComposeValueReadEvidence): CausalConfidence? =
+    if (evidence == ComposeValueReadEvidence.VALUE_READ) null else CausalConfidence.POSSIBLE
+
+/** Detect only recognizable snapshot reads; passing around State<T> isn't one. */
+internal fun isStateValueAccess(expression: PsiElement): Boolean {
+    val parent = expression.parent as? KtDotQualifiedExpression ?: return false
+    return parent.receiverExpression == expression && parent.selectorExpression?.text == "value"
+}
+
+/** The collector's result may be read immediately or stored in a local property. */
+internal fun AnalysisApiFlowAnalyzer.collectorReadEvidence(
+    collector: KtCallExpression,
+    owner: ComposeOwner,
+): ComposeValueReadEvidence {
+    if (isStateValueAccess(collector)) return ComposeValueReadEvidence.VALUE_READ
+    val property = PsiTreeUtil.getParentOfType(collector, KtProperty::class.java, true)
+        ?.takeIf { local ->
+            listOfNotNull(local.initializer, local.delegateExpression).any { expression ->
+                expression.textRange.contains(collector.textRange)
+            }
+        } ?: return ComposeValueReadEvidence.UNVERIFIED
+    val name = property.name ?: return ComposeValueReadEvidence.UNVERIFIED
+    val delegated = property.delegateExpression != null
+    val verifiedRead = PsiTreeUtil.findChildrenOfType(owner.body, KtNameReferenceExpression::class.java)
+        .asSequence()
+        .filter { it.getReferencedName() == name }
+        .filter { runCatching { it.mainReference.resolve() == property }.getOrDefault(false) }
+        .any { reference -> delegated || isStateValueAccess(reference) }
+    return if (verifiedRead) ComposeValueReadEvidence.VALUE_READ else ComposeValueReadEvidence.UNVERIFIED
+}
+
+/** A Compose mutable-state property can be a State<T> object or a delegated value. */
+internal fun composePropertyReadEvidence(
+    property: KtProperty,
+    reference: KtNameReferenceExpression,
+): ComposeValueReadEvidence =
+    if (property.delegateExpression != null || isStateValueAccess(reference)) {
+        ComposeValueReadEvidence.VALUE_READ
+    } else ComposeValueReadEvidence.UNVERIFIED
+
 internal fun AnalysisApiFlowAnalyzer.addDirectComposeStateConsumer(
     nodes: MutableMap<String, FlowNode>,
     edges: MutableSet<FlowEdge>,
     sourceStateId: String,
+    property: KtProperty,
     reference: KtNameReferenceExpression,
     expandChildren: Boolean = true,
 ): Boolean {
     val root = enclosingComposeOwner(reference) ?: return false
     val rootId = root.node.id
     nodes.putIfAbsent(rootId, root.node)
+    val evidence = composePropertyReadEvidence(property, reference)
     addEdge(
         edges,
         FlowEdge(
             from = sourceStateId,
             to = rootId,
             kind = EdgeKind.UPDATES_COMPOSE,
-            label = "Compose state → recompose",
+            label = composeDependencyLabel(evidence),
+            confidence = composeDependencyConfidence(evidence),
             source = sourceLocation(reference),
         ),
     )
@@ -127,13 +190,15 @@ internal fun AnalysisApiFlowAnalyzer.addComposeConsumer(
     val root = enclosingComposeOwner(collector.anchor) ?: return false
     val rootId = root.node.id
     nodes.putIfAbsent(rootId, root.node)
+    val evidence = collectorReadEvidence(collector.anchor, root)
     addEdge(
         edges,
         FlowEdge(
             from = stageId(collector),
             to = rootId,
             kind = EdgeKind.UPDATES_COMPOSE,
-            label = "recompose",
+            label = composeDependencyLabel(evidence, collected = true),
+            confidence = composeDependencyConfidence(evidence),
             source = sourceLocation(collector.anchor),
         ),
     )
