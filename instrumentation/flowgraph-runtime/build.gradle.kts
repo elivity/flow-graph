@@ -27,25 +27,15 @@ val licenseName = releaseProperties.getProperty("flowGraphLicenseName")
     ?: error("flowGraphLicenseName missing from ../../gradle.properties")
 val licenseUrl = releaseProperties.getProperty("flowGraphLicenseUrl")
     ?: error("flowGraphLicenseUrl missing from ../../gradle.properties")
-val defaultRuntimeGroup = releaseProperties.getProperty("flowGraphRuntimeGroup")
-    ?: "com.github.elivity"
-val defaultRuntimeArtifact = releaseProperties.getProperty("flowGraphRuntimeArtifact")
-    ?: "flow-graph"
+// JitPack's multi-module coordinates: com.github.<owner>.<repo>:<module>:<tag>.
+// Keep this independent of Gradle's -Pgroup/-Partifact injected parameters.
+val jitpackGroup = releaseProperties.getProperty("flowGraphJitPackGroup")
+    ?: error("flowGraphJitPackGroup missing from ../../gradle.properties")
+val jitpackBuild = providers.gradleProperty("flowGraphJitPack")
+    .map(String::toBoolean).getOrElse(false)
 
-// JitPack invokes the build with -Pgroup=$GROUP -Partifact=$ARTIFACT -Pversion=$VERSION.
-// Local builds fall back to the normal public coordinates/version.
-val publishedGroup = providers.gradleProperty("group")
-    .orElse(providers.environmentVariable("GROUP"))
-    .orElse(defaultRuntimeGroup)
-val publishedArtifact = providers.gradleProperty("artifact")
-    .orElse(providers.environmentVariable("ARTIFACT"))
-    .orElse(defaultRuntimeArtifact)
-val publishedVersion = providers.gradleProperty("version")
-    .orElse(providers.environmentVariable("VERSION"))
-    .orElse(flowGraphVersion)
-
-group = publishedGroup.get()
-version = publishedVersion.get()
+group = if (jitpackBuild) jitpackGroup else "com.oskiapps.flowgraph"
+version = flowGraphVersion
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(17))
@@ -60,9 +50,9 @@ publishing {
     publications {
         create<MavenPublication>("jitpack") {
             from(components["java"])
-            groupId = publishedGroup.get()
-            artifactId = publishedArtifact.get()
-            version = publishedVersion.get()
+            groupId = project.group.toString()
+            artifactId = "flowgraph-runtime"
+            version = project.version.toString()
 
             pom {
                 name.set("Flow Graph Runtime")

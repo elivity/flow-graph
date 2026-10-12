@@ -24,6 +24,9 @@ import javax.inject.Inject
 
 abstract class FlowGraphInstrumentationExtension @Inject constructor(objects: ObjectFactory) {
     val enabled: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
+    /** Automatically add the version-matched runtime to debugImplementation. */
+    val addRuntimeDependency: Property<Boolean> =
+        objects.property(Boolean::class.java).convention(true)
     val traceReads: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
     /** Trace cold Flow collection boundaries and FlowCollector element delivery. */
     val traceColdFlows: Property<Boolean> = objects.property(Boolean::class.java).convention(true)
@@ -54,25 +57,15 @@ class FlowGraphInstrumentationPlugin : Plugin<Project> {
         )
 
         project.plugins.withId("com.android.application") {
-            // The runtime is intentionally an explicit consumer dependency. This keeps the
-            // Gradle plugin conventional and makes the app-side setup visible in build.gradle.kts:
-            // debugImplementation("com.github.elivity:flow-graph:<same version>")
-
-            project.afterEvaluate {
-                val hasRuntime = project.configurations.findByName("debugImplementation")
-                    ?.dependencies
-                    ?.any { dependency ->
-                        dependency.group == "com.github.elivity" && dependency.name == "flow-graph"
-                    } == true
-                if (!hasRuntime) {
-                    project.logger.warn(
-                        "Flow Graph: runtime dependency not found. Add " +
-                            "debugImplementation(\"com.github.elivity:flow-graph:<same version as the plugin>\")",
-                    )
+            val androidComponents = project.extensions.getByType(ApplicationAndroidComponentsExtension::class.java)
+            // Finalize the app DSL before resolving variants, so the app can configure
+            // the opt-out and existing manual dependencies can be detected without
+            // adding dependencies to an already-resolved variant classpath.
+            androidComponents.finalizeDsl {
+                if (extension.addRuntimeDependency.get()) {
+                    FlowGraphRuntimeDependency.install(project)
                 }
             }
-
-            val androidComponents = project.extensions.getByType(ApplicationAndroidComponentsExtension::class.java)
             androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
                 if (!extension.enabled.get()) return@onVariants
 
