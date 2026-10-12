@@ -1,3 +1,9 @@
+## 0.20.12 — JitPack wrapper publication follow-up
+
+- Advance the IDE plugin, Gradle instrumentation plugin, and Android runtime to the same `0.20.12` release version.
+- Carry forward the JitPack build change to use the repository-pinned Gradle wrapper for both publication modules.
+- No application or instrumentation behavior changes in this release.
+
 ## 0.20.11 — Release version update
 
 - Advance the IDE plugin, Gradle instrumentation plugin, and Android runtime to the same `0.20.11` release version.

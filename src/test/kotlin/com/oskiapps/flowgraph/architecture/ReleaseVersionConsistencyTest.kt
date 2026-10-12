@@ -31,7 +31,9 @@ class ReleaseVersionConsistencyTest {
 
     @Test
     fun `historical compatibility notes do not mask stale installation versions`() {
-        val current = "0.20.11"
+        val current = Properties().apply {
+            Files.newInputStream(Path.of("gradle.properties")).use(::load)
+        }.getProperty("flowGraphVersion")
         assertTrue(staleReleaseVersions(
             "Flow Graph `0.20.9` and later support Rabbit 1.", current
         ).isEmpty())
