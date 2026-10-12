@@ -132,14 +132,9 @@ internal class GraphCanvas(
     internal var frozenLayout: NodeLayout? = null
 
     internal var zoom = 1.0
-    // Wheel/trackpad input can arrive much faster than Swing can resize the canvas + JViewport.
-    // Keep only one visual zoom commit per display frame and fold all wheel deltas received during
-    // that frame into it. This removes the resize/anchor/repaint feedback loop that made zoom feel
-    // jittery on dense graphs.
-    internal var pendingWheelZoomExponent = 0.0
-    internal var pendingWheelModelX = 0.0
-    internal var pendingWheelModelY = 0.0
-    internal var pendingWheelAnchorInViewport: Point? = null
+    // One stable cursor/model anchor per continuous wheel gesture. Never replace it with a
+    // canvas-relative point captured after the viewport has moved or resized.
+    internal val wheelZoomGesture = WheelZoomGesture()
     internal var zoomApplyGeneration = 0L
     internal val wheelZoomTimer = Timer(WHEEL_ZOOM_FRAME_MS) {
         flushPendingWheelZoom()
@@ -354,7 +349,7 @@ internal class GraphCanvas(
             override fun mouseWheelMoved(e: java.awt.event.MouseWheelEvent) {
                 if (e.preciseWheelRotation == 0.0) return
                 onUserViewportInteraction()
-                queueWheelZoom(e.preciseWheelRotation, Point(e.point))
+                queueWheelZoom(e.preciseWheelRotation, Point(e.point), Point(e.locationOnScreen), e.`when`)
                 e.consume()
             }
         }

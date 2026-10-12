@@ -189,47 +189,85 @@ internal fun GraphCanvas.fitToViewport() {
 
 
 
-internal fun GraphCanvas.queueWheelZoom(wheelRotation: Double, anchorInCanvas: Point) {
+internal fun GraphCanvas.queueWheelZoom(
+    wheelRotation: Double,
+    anchorInCanvas: Point,
+    anchorOnScreen: Point,
+    eventMillis: Long,
+) {
     val viewport = viewport()
     if (viewport == null) {
-        val factor = Math.exp(-wheelRotation * WHEEL_ZOOM_SENSITIVITY)
-        setZoom(zoom * factor, anchorInCanvas)
+        setZoom(zoom * Math.exp(-wheelRotation * WHEEL_ZOOM_SENSITIVITY), anchorInCanvas)
         return
     }
 
-    // Capture the logical point under the *latest* pointer position. Wheel deltas are additive
-    // in log-space, so several raw wheel/trackpad events collapse into one smooth scale change.
-    pendingWheelZoomExponent = (pendingWheelZoomExponent -
-        wheelRotation * WHEEL_ZOOM_SENSITIVITY).coerceIn(-0.8, 0.8)
-    pendingWheelModelX = (anchorInCanvas.x.toDouble() - canvasPaddingX) / zoom
-    pendingWheelModelY = (anchorInCanvas.y.toDouble() - canvasPaddingY) / zoom
-    pendingWheelAnchorInViewport = SwingUtilities.convertPoint(this, anchorInCanvas, viewport)
-
+    // Complete input from a previous gesture before capturing the new anchor. Keep the cursor's
+    // original viewport position, since flushing the old zoom can move the canvas underneath it.
+    val cursorBeforeFlush = SwingUtilities.convertPoint(this, anchorInCanvas, viewport)
+    val sameGesture = wheelZoomGesture.continuesAt(eventMillis)
+    var flushedPrevious = false
+    if (!sameGesture) {
+        val previousAnchor = wheelZoomGesture.anchor
+        val remainder = wheelZoomGesture.takeRemainingExponent()
+        if (previousAnchor != null && kotlin.math.abs(remainder) >= 0.000001) {
+            applyZoomAroundModelPoint(
+                zoom * Math.exp(remainder), previousAnchor.modelX, previousAnchor.modelY,
+                previousAnchor.viewportPoint, previousAnchor.screenPoint,
+            )
+            flushedPrevious = true
+        }
+    }
+    val cursorInCanvas = if (flushedPrevious) {
+        if (isShowing) {
+            Point(anchorOnScreen).also { SwingUtilities.convertPointFromScreen(it, this) }
+        } else {
+            SwingUtilities.convertPoint(viewport, cursorBeforeFlush, this)
+        }
+    } else {
+        anchorInCanvas
+    }
+    wheelZoomGesture.accept(
+        eventMillis,
+        -wheelRotation * WHEEL_ZOOM_SENSITIVITY,
+        WheelZoomAnchor(
+            (cursorInCanvas.x.toDouble() - canvasPaddingX) / zoom,
+            (cursorInCanvas.y.toDouble() - canvasPaddingY) / zoom,
+            SwingUtilities.convertPoint(this, cursorInCanvas, viewport),
+            Point(anchorOnScreen),
+        ),
+    )
     if (!wheelZoomTimer.isRunning) wheelZoomTimer.start()
 }
 
 
 
 internal fun GraphCanvas.flushPendingWheelZoom() {
-    val exponent = pendingWheelZoomExponent
-    val anchorInViewport = pendingWheelAnchorInViewport
-    val modelX = pendingWheelModelX
-    val modelY = pendingWheelModelY
-    pendingWheelZoomExponent = 0.0
-    pendingWheelAnchorInViewport = null
-
+    val anchor = wheelZoomGesture.anchor ?: return
+    val exponent = wheelZoomGesture.takeFrameExponent()
     if (kotlin.math.abs(exponent) < 0.000001) return
+
     val targetZoom = (zoom * Math.exp(exponent))
         .coerceIn(currentMinZoom(), currentMaxZoom())
-    applyZoomAroundModelPoint(targetZoom, modelX, modelY, anchorInViewport)
+    if (kotlin.math.abs(targetZoom - zoom) <= zoom * 0.000000001) {
+        // A zoom limit was reached; don't carry an old overscroll into the opposite direction.
+        wheelZoomGesture.discardPending()
+        return
+    }
+    applyZoomAroundModelPoint(
+        targetZoom, anchor.modelX, anchor.modelY, anchor.viewportPoint, anchor.screenPoint,
+    )
+    if (targetZoom == currentMinZoom() || targetZoom == currentMaxZoom()) {
+        wheelZoomGesture.discardPending()
+    } else if (wheelZoomGesture.hasPending()) {
+        wheelZoomTimer.restart()
+    }
 }
 
 
 
 internal fun GraphCanvas.cancelPendingWheelZoom() {
     if (wheelZoomTimer.isRunning) wheelZoomTimer.stop()
-    pendingWheelZoomExponent = 0.0
-    pendingWheelAnchorInViewport = null
+    wheelZoomGesture.clear()
     // Invalidate any delayed anchor correction from an older zoom frame.
     zoomApplyGeneration++
 }
@@ -253,28 +291,41 @@ internal fun GraphCanvas.applyZoomAroundModelPoint(
     modelX: Double,
     modelY: Double,
     anchorInViewport: Point?,
+    anchorOnScreen: Point? = null,
 ) {
     val newZoom = requestedZoom.coerceIn(currentMinZoom(), currentMaxZoom())
-    if (kotlin.math.abs(newZoom - zoom) < 0.0001) return
+    if (kotlin.math.abs(newZoom - zoom) <= zoom * 0.000000001) return
 
     val viewport = viewport()
     val generation = ++zoomApplyGeneration
     zoom = newZoom
     updateScaledPreferredSize()
     revalidate()
+    // A zoom often changes scrollbar visibility and therefore the viewport extent. Resolve the
+    // layout before restoring the camera, not using the previous frame's dimensions.
+    viewport?.parent?.doLayout()
+    viewport?.doLayout()
     onZoomChanged(zoom)
 
     fun restoreMouseAnchor() {
         if (viewport == null || anchorInViewport == null) return
-        val targetX = kotlin.math.round(canvasPaddingX + modelX * zoom - anchorInViewport.x).toInt()
-        val targetY = kotlin.math.round(canvasPaddingY + modelY * zoom - anchorInViewport.y).toInt()
-        viewport.viewPosition = clampViewPosition(viewport, targetX, targetY)
+        // If the header wrapped or a scrollbar appeared, the viewport itself may have moved on
+        // screen. Keep the content under the actual, original physical mouse location.
+        val cursor = if (anchorOnScreen != null && viewport.isShowing) {
+            Point(anchorOnScreen).also { SwingUtilities.convertPointFromScreen(it, viewport) }
+        } else {
+            anchorInViewport
+        }
+        viewport.viewPosition = clampViewPosition(
+            viewport,
+            anchoredViewOffset(canvasPaddingX, modelX, zoom, cursor.x),
+            anchoredViewOffset(canvasPaddingY, modelY, zoom, cursor.y),
+        )
     }
 
-    // Do one immediate correction and at most one post-layout correction for this visual frame.
-    // A newer wheel frame invalidates the older callback, preventing stale invokeLater work from
-    // pulling the viewport back and forth while a fast trackpad gesture is still in progress.
     restoreMouseAnchor()
+    // Swing may still validate an ancestor on the next EDT cycle. Only the latest zoom frame may
+    // correct the position afterwards; stale frames must never tug the viewport backwards.
     SwingUtilities.invokeLater {
         if (generation != zoomApplyGeneration) return@invokeLater
         restoreMouseAnchor()
