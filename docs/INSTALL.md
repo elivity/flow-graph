@@ -1,6 +1,6 @@
-# Installation — Flow Graph 0.20.10
+# Installation — Flow Graph 0.20.11
 
-**Static analysis and Live tracing have different installation requirements.** This is the detailed companion to the [README installation section](../README.md#installation). Version `0.20.10` refers to the checked-out source; remote artifacts must be verified before installation.
+**Static analysis and Live tracing have different installation requirements.** This is the detailed companion to the [README installation section](../README.md#installation). Version `0.20.11` refers to the checked-out source; remote artifacts must be verified before installation.
 
 ## Static Flow/StateFlow and Compose analysis
 
@@ -20,10 +20,10 @@ The IDE plugin finds production `@Composable` functions independently of state/F
 
 Live tracing requires the IDE plugin **plus** two independently published artifacts from the same version:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.10`
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.10`
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.11`
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.11`
 
-First confirm that the tagged `0.20.10` [JitPack build](https://jitpack.io/#elivity/flow-graph) succeeded. **A source ZIP or local Git tag does not publish these artifacts.** The Gradle plugin adds the runtime to `debugImplementation` automatically; the app must not add it manually.
+First confirm that the tagged `0.20.11` [JitPack build](https://jitpack.io/#elivity/flow-graph) succeeded. **A source ZIP or local Git tag does not publish these artifacts.** The Gradle plugin adds the runtime to `debugImplementation` automatically; the app must not add it manually.
 
 ### 1. Merge repository configuration into the existing app settings
 
@@ -63,7 +63,7 @@ The plugin-resolution mapping is for the JitPack implementation module; Gradle P
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.10"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.11"
 }
 ```
 
@@ -117,4 +117,4 @@ Flow Graph `0.20.9` and later expand the IDE plugin's declared IntelliJ compatib
 
 The `verifyPlugin` task checks the packaged plugin against Android Studio `2026.2.1.8`. It may download the IDE and verifier on first use. Run a manual smoke test for the tool window, **Load all flows**, Compose discovery, node selection, and Live tracing after upgrading Android Studio.
 
-Older plugin builds with `untilBuild = "261.*"` remain incompatible with Rabbit at the metadata level: install the `0.20.10` IDE plugin ZIP or upgrade it from Marketplace once that release is published. The Android app's Gradle instrumentation and debug runtime remain separate artifacts.
+Older plugin builds with `untilBuild = "261.*"` remain incompatible with Rabbit at the metadata level: install the `0.20.11` IDE plugin ZIP or upgrade it from Marketplace once that release is published. The Android app's Gradle instrumentation and debug runtime remain separate artifacts.

@@ -31,7 +31,7 @@ class ReleaseVersionConsistencyTest {
 
     @Test
     fun `historical compatibility notes do not mask stale installation versions`() {
-        val current = "0.20.10"
+        val current = "0.20.11"
         assertTrue(staleReleaseVersions(
             "Flow Graph `0.20.9` and later support Rabbit 1.", current
         ).isEmpty())

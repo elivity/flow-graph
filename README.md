@@ -11,7 +11,7 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
-**Source version: 0.20.10** (publication status must be verified separately) · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+**Source version: 0.20.11** (publication status must be verified separately) · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
 
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
@@ -92,7 +92,7 @@ Choose the setup for the features you need. **Static Flow/StateFlow and Compose 
 | Static Flow, StateFlow, SharedFlow and Compose hierarchy analysis | **IDE plugin only** |
 | Live tracing of a running debug app | **IDE plugin + Gradle instrumentation plugin + debug runtime** |
 
-The source tree is at **0.20.10**, but **a source version, Git tag, local ZIP, or JitPack badge is not proof that an installable release exists**. Before installing from a remote repository, verify that the corresponding version is actually available there. See [Publishing](PUBLISHING.md) for the release process.
+The source tree is at **0.20.11**, but **a source version, Git tag, local ZIP, or JitPack badge is not proof that an installable release exists**. Before installing from a remote repository, verify that the corresponding version is actually available there. See [Publishing](PUBLISHING.md) for the release process.
 
 ### A. Static analysis — IDE plugin only
 
@@ -102,16 +102,16 @@ The source tree is at **0.20.10**, but **a source version, Git tag, local ZIP, o
 2. In Android Studio, open **Settings → Plugins → ⚙ → Install Plugin from Disk…**.
 3. Select the plugin ZIP under `build/distributions/` and restart Android Studio if prompted.
 
-**JetBrains Marketplace (only after a release is published):** Use **Settings → Plugins → Marketplace**, search for **Flow Graph**, and install a compatible published version. Do not assume Marketplace has version `0.20.10` just because the source uses that version.
+**JetBrains Marketplace (only after a release is published):** Use **Settings → Plugins → Marketplace**, search for **Flow Graph**, and install a compatible published version. Do not assume Marketplace has version `0.20.11` just because the source uses that version.
 
 You can now use **Show Flow Graph** and **Load all flows** for static analysis, including independent production `@Composable` discovery. No JitPack repository, Gradle instrumentation plugin, runtime dependency, or `INTERNET` permission is required for this path.
 
 ### B. Live tracing — additional Android app setup
 
-The following steps are **only for Live runtime tracing**. They assume that the **`0.20.10` JitPack build has succeeded** for *both* artifacts:
+The following steps are **only for Live runtime tracing**. They assume that the **`0.20.11` JitPack build has succeeded** for *both* artifacts:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.10`
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.10`
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.11`
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.11`
 
 Check the build and artifact availability at [JitPack — elivity/flow-graph](https://jitpack.io/#elivity/flow-graph) **before** using these coordinates. If they are not published yet, use the [local development fallback](#local-development-fallback-before-jitpack-publication) below instead.
 
@@ -153,7 +153,7 @@ The `resolutionStrategy` maps the instrumentation **plugin ID** to JitPack's **i
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.10"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.11"
 }
 ```
 
@@ -183,7 +183,7 @@ Enable **Live** in the Flow Graph tool window. Without the instrumentation plugi
 
 ### Local development fallback before JitPack publication
 
-If the `0.20.10` JitPack artifacts are not available yet, you can build and publish both modules to your **local Maven repository** from a Flow Graph source checkout:
+If the `0.20.11` JitPack artifacts are not available yet, you can build and publish both modules to your **local Maven repository** from a Flow Graph source checkout:
 
 ```bash
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
@@ -440,7 +440,7 @@ Test both JitPack module publications locally:
   :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```
 
-This checks local Maven artifacts; it does **not** publish to JitPack. Push the `0.20.10` tag to GitHub to make the release buildable there.
+This checks local Maven artifacts; it does **not** publish to JitPack. Push the `0.20.11` tag to GitHub to make the release buildable there.
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).
 

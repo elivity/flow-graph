@@ -1,3 +1,8 @@
+## 0.20.11 — Release version update
+
+- Advance the IDE plugin, Gradle instrumentation plugin, and Android runtime to the same `0.20.11` release version.
+- Retain the release-documentation regression fix from the previous revision; no new runtime behavior changes.
+
 ## 0.20.10 — Remove Kotlin JVM Object type warnings in instrumentation
 
 - Replace 16 references to Java `Object::class.java` in the ASM visitor with the Kotlin `Any`-backed JVM object type.
