@@ -112,7 +112,7 @@ internal fun GraphCanvas.drawArrow(
         else -> null
     }
 
-    if (circuitViewEnabled && pathStyle != EdgePathStyle.DIMMED) {
+    if (circuitViewEnabled && zoom >= 0.38 && pathStyle != EdgePathStyle.DIMMED) {
         val glowAlpha = if (pathStyle == EdgePathStyle.SEED) 88 else 56
         val glowStroke = BasicStroke(width + if (pathStyle == EdgePathStyle.SEED) 4.5f else 3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         g.color = withAlpha(baseColor, glowAlpha)
@@ -135,18 +135,22 @@ internal fun GraphCanvas.drawArrow(
     val arrow = if (direct && direction != EdgeDirection.NONE) 11 else 9
     drawArrowHead(g, points, arrow)
 
-    g.font = font.deriveFont(
-        if (edge.kind == EdgeKind.PROPAGATES || (direct && direction != EdgeDirection.NONE)) Font.BOLD else Font.PLAIN,
-        if (direct && direction != EdgeDirection.NONE) 10f else 9f,
-    )
-    val overlayLabel = buildString {
-        append(edgeDisplayLabel(edge))
-        if (runtimeCount > 0) append(" • live ×$runtimeCount")
-    }
-    val showEdgeLabel = pathStyle in setOf(EdgePathStyle.SEED, EdgePathStyle.PATH) ||
-        hasSelection || direct || runtimeCount > 0 ||
-        (!interCluster && zoom >= 0.42 && pathStyle != EdgePathStyle.DIMMED)
+    // A 9pt label at 20% zoom is unreadable. Avoid allocating its font/string and
+    // rendering it hundreds of times during overview zoom or Live repaints.
+    val showEdgeLabel = zoom >= 0.42 && (
+        pathStyle in setOf(EdgePathStyle.SEED, EdgePathStyle.PATH) ||
+            hasSelection || direct || runtimeCount > 0 ||
+            (!interCluster && pathStyle != EdgePathStyle.DIMMED)
+        )
     if (showEdgeLabel) {
+        g.font = font.deriveFont(
+            if (edge.kind == EdgeKind.PROPAGATES || (direct && direction != EdgeDirection.NONE)) Font.BOLD else Font.PLAIN,
+            if (direct && direction != EdgeDirection.NONE) 10f else 9f,
+        )
+        val overlayLabel = buildString {
+            append(edgeDisplayLabel(edge))
+            if (runtimeCount > 0) append(" • live ×$runtimeCount")
+        }
         val labelPoint = polylineMidPoint(points)
         g.drawString(overlayLabel.take(90), labelPoint.x + 8, labelPoint.y - 6)
     }
