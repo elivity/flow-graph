@@ -206,7 +206,7 @@ internal fun FlowGraph.stateChangeProjection(includeReads: Boolean = true): Flow
                 from = sourceState,
                 to = update.to,
                 kind = EdgeKind.UPDATES_COMPOSE,
-                label = update.label ?: "collectAsState → recompose",
+                label = update.label ?: "Compose State observation",
                 confidence = confidence.takeIf { it == CausalConfidence.POSSIBLE },
                 source = update.source,
             )

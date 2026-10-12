@@ -127,6 +127,7 @@ internal fun AnalysisApiFlowAnalyzer.buildGraph(
                         nodes = nodes,
                         edges = edges,
                         sourceStateId = stateId,
+                        property = property,
                         reference = reference,
                         expandChildren = !deferComposeExpansionToProjectTopology,
                     )

@@ -29,10 +29,14 @@ internal fun FlowGraph.mergeEquivalentProjectedEdges(projected: List<FlowEdge>):
         .map { (_, alternatives) ->
             val first = alternatives.first()
             val allPossible = alternatives.all { it.effectiveConfidence() == CausalConfidence.POSSIBLE }
+            val bestEvidence = alternatives.firstOrNull {
+                it.effectiveConfidence() != CausalConfidence.POSSIBLE
+            } ?: first
             val labels = alternatives.mapNotNull { it.label?.takeIf(String::isNotBlank) }.distinct()
             first.copy(
                 affectedFields = alternatives.flatMapTo(linkedSetOf()) { it.affectedFields },
-                label = labels.joinToString(" | ").takeIf { it.isNotBlank() },
+                label = if (first.kind == EdgeKind.UPDATES_COMPOSE) bestEvidence.label
+                    else labels.joinToString(" | ").takeIf { it.isNotBlank() },
                 confidence = if (allPossible) CausalConfidence.POSSIBLE else null,
                 source = alternatives.firstNotNullOfOrNull { it.source },
             )
@@ -122,10 +126,13 @@ internal fun FlowGraph.conciseOverviewProjection(): FlowGraph {
         .map { (_, alternatives) ->
             val first = alternatives.first()
             val allPossible = alternatives.all { it.effectiveConfidence() == CausalConfidence.POSSIBLE }
+            val bestEvidence = alternatives.firstOrNull {
+                it.effectiveConfidence() != CausalConfidence.POSSIBLE
+            } ?: first
             val count = alternatives.size
             val conciseLabel = when (first.kind) {
                 EdgeKind.COMPOSES -> if (count > 1) "composes ×$count" else null
-                EdgeKind.UPDATES_COMPOSE -> "updates UI"
+                EdgeKind.UPDATES_COMPOSE -> bestEvidence.label ?: "Compose State observation"
                 EdgeKind.PROPAGATES -> {
                     val fields = alternatives.flatMapTo(linkedSetOf()) { it.affectedFields }
                     val stateToState =

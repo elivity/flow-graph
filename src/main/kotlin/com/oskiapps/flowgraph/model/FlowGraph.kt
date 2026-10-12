@@ -64,7 +64,7 @@ enum class EdgeKind {
     TRIGGERS_WRITE,
     /** The source Flow is observed/read here, but no tracked state write is known. */
     READS,
-    /** A collectAsState/collectAsStateWithLifecycle result invalidates/recomposes a composable. */
+    /** A static Compose State observation: confidence is POSSIBLE unless a value read is verified. */
     UPDATES_COMPOSE,
     /** A composable/function/call-site composes another source composable or visual Compose call site. */
     COMPOSES,
