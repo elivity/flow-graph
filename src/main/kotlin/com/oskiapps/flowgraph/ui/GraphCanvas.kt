@@ -155,6 +155,7 @@ internal class GraphCanvas(
     internal var panDragged = false
     internal var suppressNextClick = false
     internal var magnifierMousePoint: Point? = null
+    internal var hoveredNameVisualId: String? = null
 
     internal data class RuntimeLensTarget(
         val node: FlowNode,
@@ -338,12 +339,21 @@ internal class GraphCanvas(
             override fun mouseMoved(e: MouseEvent) {
                 magnifierMousePoint = Point(e.point)
                 updateCursor(e.point)
-                if (magnifierEnabled) repaint()
+                if (zoom < MIN_READABLE_LABEL_ZOOM) {
+                    val point = toModelPoint(e.point)
+                    val hovered = boundsById.entries.firstOrNull { it.value.contains(point) }?.key
+                    if (hovered != hoveredNameVisualId) {
+                        hoveredNameVisualId = hovered
+                        repaint()
+                    } else if (magnifierEnabled) repaint()
+                } else if (magnifierEnabled) repaint()
             }
 
             override fun mouseExited(e: MouseEvent) {
                 magnifierMousePoint = null
-                if (magnifierEnabled) repaint()
+                val repaintLabels = hoveredNameVisualId != null
+                hoveredNameVisualId = null
+                if (magnifierEnabled || repaintLabels) repaint()
             }
 
             override fun mouseWheelMoved(e: java.awt.event.MouseWheelEvent) {
@@ -540,6 +550,15 @@ internal class GraphCanvas(
             drawGraphScene(sceneGraphics, model, updateBounds = true)
         } finally {
             sceneGraphics.dispose()
+        }
+
+        if (zoom < MIN_READABLE_LABEL_ZOOM) {
+            val namesGraphics = graphics.create() as Graphics2D
+            try {
+                drawLowZoomNodeNames(namesGraphics, model)
+            } finally {
+                namesGraphics.dispose()
+            }
         }
 
         if (eventLensEnabled) {
