@@ -47,7 +47,7 @@ internal fun AnalysisApiFlowAnalyzer.buildGraph(
     rootLabel: String,
     maxAnalyzedProperties: Int,
     maxGraphNodes: Int,
-    projectComposables: List<KtNamedFunction> = emptyList(),
+    deferComposeExpansion: Boolean = false,
     productionSourcesOnly: Boolean = false,
     projectDiscoveryTruncated: Boolean = false,
     excludedTestFiles: Int = 0,
@@ -58,7 +58,7 @@ internal fun AnalysisApiFlowAnalyzer.buildGraph(
     val diagnostics = mutableListOf<String>()
     // In All Flows, Compose descendants are built once by the global topology pass. Focused
     // analysis still expands locally from each consumer for fast, rich detail.
-    val deferComposeExpansionToProjectTopology = projectComposables.isNotEmpty()
+    val deferComposeExpansionToProjectTopology = deferComposeExpansion
     val queued = mutableSetOf<KtProperty>()
     val queue = ArrayDeque<Pair<KtProperty, Int>>()
     roots.sortedBy(::propertyId).forEach { root ->
@@ -205,15 +205,6 @@ internal fun AnalysisApiFlowAnalyzer.buildGraph(
         }
     }
 
-    if (projectComposables.isNotEmpty()) {
-        addProjectComposeTopology(
-            nodes = nodes,
-            edges = edges,
-            diagnostics = diagnostics,
-            composables = projectComposables,
-            maxGraphNodes = maxGraphNodes,
-        )
-    }
     if (excludedTestFiles > 0) {
         diagnostics += "All Flows ignored $excludedTestFiles Kotlin files from test source roots."
     }

@@ -33,6 +33,7 @@ class AnalysisApiFlowAnalyzer(internal val project: Project) {
     internal data class ProjectDiscovery(
         val flowProperties: List<KtProperty>,
         val composables: List<KtNamedFunction>,
+        val composeHosts: List<KtCallExpression>,
         val inspectedPropertyLimitHit: Boolean,
         val composableLimitHit: Boolean,
         val excludedTestFiles: Int,
@@ -83,57 +84,12 @@ class AnalysisApiFlowAnalyzer(internal val project: Project) {
     )
 
 
-
-
-
-    internal data class ComposeTopologyEdge(
-        val fromId: String,
-        val toId: String,
-        val source: SourceLocation?,
-    )
-
-    /**
-     * Adds the project-level Compose call topology to All Flows.
-     *
-     * The focused graph grows Compose downward from a state consumer. Doing that independently for
-     * every All-Flows root leaves sibling screens as visual islands because their common callers may
-     * never read Flow state themselves. This pass builds a compact project Compose call graph once,
-     * then keeps only components reachable from Compose nodes already anchored to the state graph.
-     *
-     * Performance rules:
-     *  - only production Kotlin source roots are admitted by discoverProjectSymbols();
-     *  - project Kotlin files were already scanned once by discoverProjectSymbols();
-     *  - calls are prefiltered by project-composable name before K2 resolution;
-     *  - candidate calls for one function are resolved in one K2 analysis session;
-     *  - only state-connected Compose components are materialized as FlowNodes;
-     *  - node/edge/call caps keep large/generated projects bounded;
-     *  - multi-source BFS prefers topology closest to existing state-connected composables when a
-     *    cap is hit.
-     */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     internal companion object {
         val COMPOSE_DSL_SCOPE_TYPES = setOf(
             "LazyListScope",
             "LazyGridScope",
             "LazyStaggeredGridScope",
+            "NavGraphBuilder",
         )
         val LAZY_COMPOSE_DSL_CALLS = setOf(
             "item",
@@ -141,6 +97,7 @@ class AnalysisApiFlowAnalyzer(internal val project: Project) {
             "itemsIndexed",
             "stickyHeader",
         )
+        val NAVIGATION_DSL_CALLS = setOf("composable", "dialog", "navigation", "bottomSheet")
 
         const val MAX_DERIVATION_DEPTH = 12
         const val MAX_ANALYZED_PROPERTIES = 250
@@ -156,8 +113,6 @@ class AnalysisApiFlowAnalyzer(internal val project: Project) {
         const val MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE = 3_000
         const val MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION = 240
         const val MAX_ALL_COMPOSE_CANDIDATE_CALLS = 24_000
-        const val MAX_ALL_COMPOSE_TOPOLOGY_DISCOVERED_EDGES = 12_000
-        const val MAX_ALL_COMPOSE_TOPOLOGY_NEW_NODES = 1_500
         const val MAX_ALL_COMPOSE_TOPOLOGY_EDGES = 6_000
     }
 }
