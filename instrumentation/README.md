@@ -20,11 +20,11 @@ dependencyResolutionManagement {
 
 ```kotlin
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.6")
+    debugImplementation("com.github.elivity:flow-graph:0.20.7")
 }
 ```
 
@@ -55,4 +55,4 @@ This does not contact the public Internet, needs no runtime permission prompt, a
 ## Published artifacts
 
 - Gradle plugin ID: `com.oskiapps.flowgraph.instrumentation` (Gradle Plugin Portal)
-- Runtime: `com.github.elivity:flow-graph:0.20.6` (JitPack)
+- Runtime: `com.github.elivity:flow-graph:0.20.7` (JitPack)

@@ -26,11 +26,11 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.6")
+    debugImplementation("com.github.elivity:flow-graph:0.20.7")
 }
 ```
 
@@ -39,7 +39,7 @@ If plugin versions are centralized in the root build file:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.6" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7" apply false
 }
 ```
 
@@ -50,7 +50,7 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.6")
+    debugImplementation("com.github.elivity:flow-graph:0.20.7")
 }
 ```
 
