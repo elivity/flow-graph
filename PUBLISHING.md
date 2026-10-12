@@ -1,12 +1,12 @@
-# Publishing Flow Graph 0.20.12
+# Publishing Flow Graph 0.20.13
 
 The **single `elivity/flow-graph` Git repository** contains three release artifacts: an Android Studio IDE plugin, a Gradle instrumentation plugin, and the client runtime. The latter two are separate Maven modules and are versioned with the same Git tag.
 
 | Artifact | Publication | Coordinates / identifier |
 | --- | --- | --- |
 | IDE plugin | JetBrains Marketplace (or installable ZIP) | Flow Graph |
-| Gradle instrumentation | JitPack; optionally Gradle Plugin Portal | `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.12` |
-| Debug runtime | JitPack | `com.github.elivity.flow-graph:flowgraph-runtime:0.20.12` |
+| Gradle instrumentation | JitPack; optionally Gradle Plugin Portal | `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.13` |
+| Debug runtime | JitPack | `com.github.elivity.flow-graph:flowgraph-runtime:0.20.13` |
 
 The plugin adds the runtime to `debugImplementation` automatically. Its packaged release metadata, not the consuming app's version, chooses the compatible runtime. Runtime code has no IntelliJ/Gradle compile-time dependencies.
 
@@ -21,18 +21,18 @@ The IDE plugin continues to compile against Panda 4, and now declares compatibil
   :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```
 
-Expect local Maven publications under `~/.m2/repository/com/github/elivity/flow-graph/flowgraph-runtime/0.20.12/` and `.../flowgraph-gradle-plugin/0.20.12/`. Verify both JAR/POM pairs and their contents before tagging.
+Expect local Maven publications under `~/.m2/repository/com/github/elivity/flow-graph/flowgraph-runtime/0.20.13/` and `.../flowgraph-gradle-plugin/0.20.13/`. Verify both JAR/POM pairs and their contents before tagging.
 
 ## 2. Release both modules to JitPack
 
 Push code to `https://github.com/elivity/flow-graph`, then push a matching release tag:
 
 ```bash
-git tag 0.20.12
-git push origin 0.20.12
+git tag 0.20.13
+git push origin 0.20.13
 ```
 
-Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.12` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
+Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.13` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
 
 The JitPack build invokes the repository's `./gradlew` (currently Gradle 9.0.0),
 not a separately installed SDKMAN Gradle version. If it fails resolving a published
@@ -65,7 +65,7 @@ Also add `maven("https://jitpack.io")` to `dependencyResolutionManagement.reposi
 
 ```kotlin
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.12"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.13"
 }
 ```
 

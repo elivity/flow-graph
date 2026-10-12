@@ -1,3 +1,10 @@
+## 0.20.13 — JitPack-only CI and Live shutdown test follow-up
+
+- Release the IDE plugin, Gradle instrumentation plugin, and Android debug runtime as version `0.20.13`.
+- Retain the JitPack-only CI checks without Gradle Plugin Portal publishing credentials.
+- Carry forward the Live tracing shutdown/restart test corrections for TCP close timing in CI.
+- No production behavior changes in this release.
+
 ## 0.20.12 — JitPack wrapper publication follow-up
 
 - Advance the IDE plugin, Gradle instrumentation plugin, and Android runtime to the same `0.20.12` release version.
