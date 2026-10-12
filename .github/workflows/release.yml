@@ -29,13 +29,20 @@ jobs:
           test "${GITHUB_REF_NAME}" = "${VERSION}"
       - run: gradle clean test buildPlugin
       - run: gradle -p instrumentation clean build
-      - name: Verify the artifact JitPack will publish
+      - name: Verify both JitPack publications
         shell: bash
         run: |
           VERSION="$(sed -n 's/^flowGraphVersion=//p' gradle.properties)"
           test -n "$VERSION"
           gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal \
-            -Pgroup=com.github.elivity -Partifact=flow-graph -Pversion="$VERSION"
+            :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
+          for MODULE in flowgraph-runtime flowgraph-gradle-plugin; do
+            BASE="$HOME/.m2/repository/com/github/elivity/flow-graph/$MODULE/$VERSION/$MODULE-$VERSION"
+            test -s "$BASE.jar"
+            test -s "$BASE.pom"
+          done
+          unzip -p "$HOME/.m2/repository/com/github/elivity/flow-graph/flowgraph-gradle-plugin/$VERSION/flowgraph-gradle-plugin-$VERSION.jar" \
+            flowgraph-instrumentation.properties | grep -Fx "runtimeDependency=com.github.elivity.flow-graph:flowgraph-runtime:$VERSION"
       - run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
 
   publish-gradle-plugin:

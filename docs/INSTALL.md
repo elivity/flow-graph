@@ -1,16 +1,27 @@
-# Installation
+# Installation — Flow Graph 0.20.8
 
-1. In Android Studio open **Settings -> Plugins -> Marketplace**, search for **Flow Graph**, and install it.
-2. Add JitPack to dependency repositories.
-3. Add the Flow Graph instrumentation plugin and debug runtime to the Android application module.
+Flow Graph's **IDE plugin** runs in Android Studio. Its two separate Android-side modules (Gradle instrumentation and debug runtime) are built and released together from the same repository.
+
+1. Install the IDE plugin from JetBrains Marketplace (once published), or **Settings → Plugins → Install Plugin from Disk** with your `buildPlugin` ZIP.
+2. Configure JitPack as the source of the instrumentation Gradle plugin and runtime.
+3. Apply the Gradle plugin to the Android **application** module.
 
 ```kotlin
-// settings.gradle.kts
+// settings.gradle.kts (in the Android app consuming Flow Graph)
 pluginManagement {
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven("https://jitpack.io")
+    }
+    // JitPack publishes the plugin implementation, not a Gradle plugin marker.
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.oskiapps.flowgraph.instrumentation") {
+                useModule("com.github.elivity.flow-graph:flowgraph-gradle-plugin:${requested.version}")
+            }
+        }
     }
 }
 
@@ -18,7 +29,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
+        maven("https://jitpack.io")
     }
 }
 ```
@@ -26,35 +37,18 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
 }
 
-dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.7")
-}
+// The plugin adds the matching flowgraph-runtime to debugImplementation automatically.
+// Do not add the old com.github.elivity:flow-graph dependency manually.
 ```
 
-If plugin versions are centralized in the root build file:
+The Gradle plugin automatically adds `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8` to `debugImplementation`. **Do not** add the old `com.github.elivity:flow-graph` dependency. The project no longer needs a local `pluginManagement { includeBuild("/absolute/path/instrumentation") }`.
 
-```kotlin
-// root build.gradle.kts
-plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7" apply false
-}
-```
+The Gradle plugin can additionally be published to the Gradle Plugin Portal. If installing from there, keep `gradlePluginPortal()` and omit the custom `resolutionStrategy` mapping; keep JitPack in dependency repositories for the runtime.
 
-```kotlin
-// app/build.gradle.kts
-plugins {
-    id("com.oskiapps.flowgraph.instrumentation")
-}
-
-dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.7")
-}
-```
-
-For live tracing, the inspected Android app must declare `android.permission.INTERNET`, even though Flow Graph connects only to the local TCP endpoint (`127.0.0.1:50737`) via `adb reverse`. If the app doesn't already have the permission, add this to `app/src/debug/AndroidManifest.xml` (keeping it debug-only):
+For live tracing, the Android client still requires `android.permission.INTERNET` for its **localhost** TCP socket, even though no external Internet connection is used. Add to `app/src/debug/AndroidManifest.xml` if missing:
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -62,10 +56,12 @@ For live tracing, the inspected Android app must declare `android.permission.INT
 </manifest>
 ```
 
-No runtime permission prompt or external Internet service is required. Without this permission, Android may block the socket and prevent the **Live** view from receiving events; static analysis still works.
+This is not a runtime permission prompt; it need only be declared in the debug variant. Static analysis doesn't need the client runtime or permission.
 
-Then sync, run the debug app, and run:
+Run the debug app and configure the trace port:
 
 ```bash
 adb reverse tcp:50737 tcp:50737
 ```
+
+For optional instrumentation flags, see [instrumentation/README.md](../instrumentation/README.md).

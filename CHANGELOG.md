@@ -1,3 +1,9 @@
+## 0.20.8 — Shared JitPack release for instrumentation and runtime
+
+- Publish the instrumentation Gradle plugin and its debug runtime as two separate modules from one GitHub repository/tag.
+- Automatically add the version-matched runtime to Android `debugImplementation` when the Gradle plugin is applied, with an opt-out for advanced builds.
+- Provide JitPack plugin resolution, release workflow, and migration documentation; keep the IDE plugin independent and preserve optional Gradle Plugin Portal publishing.
+
 ## 0.20.7 — Quit and release plugin session resources
 
 - Add a Quit action that closes the Flow Graph tool window and releases Live sockets, transport workers, runtime history, cached graph layouts, Compose render images, and Swing timers.
