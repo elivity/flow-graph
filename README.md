@@ -153,7 +153,21 @@ dependencies {
 }
 ```
 
-### 4. Connect live tracing
+### 4. Grant the Android client permission for live tracing
+
+The **Android app being inspected** needs the `INTERNET` permission for Flow Graph's **Live** runtime tracing. Android requires this permission to create TCP sockets **even when connecting to `127.0.0.1`**. Flow Graph's debug runtime opens a socket to port `50737` to send trace events to the Android Studio plugin (and receive inspection commands); it does **not** require an external Internet or cloud connection.
+
+If the app does not already declare this permission, add it to **`app/src/debug/AndroidManifest.xml`** so only debug builds receive it:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
+```
+
+If your app already has `INTERNET` in its merged manifest, you do not need to add it again. This is a normal Android install-time permission: **no runtime permission dialog** is needed. Without it, Android can reject the debug runtime's socket connection and the **Live** graph will receive no trace events; static graph analysis does not need this permission.
+
+### 5. Connect live tracing
 
 Run the debug app on a device/emulator and reverse the local trace port:
 

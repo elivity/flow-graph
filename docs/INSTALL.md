@@ -54,6 +54,16 @@ dependencies {
 }
 ```
 
+For live tracing, the inspected Android app must declare `android.permission.INTERNET`, even though Flow Graph connects only to the local TCP endpoint (`127.0.0.1:50737`) via `adb reverse`. If the app doesn't already have the permission, add this to `app/src/debug/AndroidManifest.xml` (keeping it debug-only):
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
+```
+
+No runtime permission prompt or external Internet service is required. Without this permission, Android may block the socket and prevent the **Live** view from receiving events; static analysis still works.
+
 Then sync, run the debug app, and run:
 
 ```bash
