@@ -22,6 +22,9 @@ import org.objectweb.asm.commons.GeneratorAdapter
 import java.io.File
 import javax.inject.Inject
 
+// Kotlin Any is java.lang.Object on the JVM; preserve the ASM reference type.
+private val JVM_OBJECT_TYPE: Type = Type.getType(Any::class.java)
+
 internal class FlowGraphClassVisitor(
     delegate: ClassVisitor,
     private val targets: Set<String>,
@@ -149,7 +152,7 @@ private class FlowGraphMethodVisitor(
             Opcodes.PUTFIELD -> {
                 val flowType = Type.getType(descriptor)
                 val flowLocal = newLocal(flowType)
-                val ownerLocal = newLocal(Type.getType(Object::class.java))
+                val ownerLocal = newLocal(JVM_OBJECT_TYPE)
                 storeLocal(flowLocal)
                 storeLocal(ownerLocal)
                 loadLocal(ownerLocal)
@@ -268,8 +271,8 @@ private class FlowGraphMethodVisitor(
         }
 
         if (name == "setValue" && descriptor == "(Ljava/lang/Object;)V" && isMutableFlowOwner(owner)) {
-            val valueLocal = newLocal(Type.getType(Object::class.java))
-            val flowLocal = newLocal(Type.getType(Object::class.java))
+            val valueLocal = newLocal(JVM_OBJECT_TYPE)
+            val flowLocal = newLocal(JVM_OBJECT_TYPE)
             storeLocal(valueLocal)
             storeLocal(flowLocal)
             loadLocal(flowLocal)
@@ -289,7 +292,7 @@ private class FlowGraphMethodVisitor(
         if (isComposeStateWriteAccessor(owner, name, descriptor)) {
             val argumentType = Type.getArgumentTypes(descriptor).single()
             val valueLocal = newLocal(argumentType)
-            val stateLocal = newLocal(Type.getType(Object::class.java))
+            val stateLocal = newLocal(JVM_OBJECT_TYPE)
             storeLocal(valueLocal)
             storeLocal(stateLocal)
             loadLocal(stateLocal)
@@ -307,9 +310,9 @@ private class FlowGraphMethodVisitor(
         }
 
         if (name == "compareAndSet" && descriptor == "(Ljava/lang/Object;Ljava/lang/Object;)Z" && isMutableFlowOwner(owner)) {
-            val newValueLocal = newLocal(Type.getType(Object::class.java))
-            val expectedLocal = newLocal(Type.getType(Object::class.java))
-            val flowLocal = newLocal(Type.getType(Object::class.java))
+            val newValueLocal = newLocal(JVM_OBJECT_TYPE)
+            val expectedLocal = newLocal(JVM_OBJECT_TYPE)
+            val flowLocal = newLocal(JVM_OBJECT_TYPE)
             val resultLocal = newLocal(Type.BOOLEAN_TYPE)
             storeLocal(newValueLocal)
             storeLocal(expectedLocal)
@@ -337,7 +340,7 @@ private class FlowGraphMethodVisitor(
         if (traceColdFlows && name == "collect" && descriptor == FLOW_COLLECT_DESCRIPTOR) {
             val continuationLocal = newLocal(Type.getType("Lkotlin/coroutines/Continuation;"))
             val collectorLocal = newLocal(Type.getType("Lkotlinx/coroutines/flow/FlowCollector;"))
-            val flowLocal = newLocal(Type.getType(Object::class.java))
+            val flowLocal = newLocal(JVM_OBJECT_TYPE)
             storeLocal(continuationLocal)
             storeLocal(collectorLocal)
             storeLocal(flowLocal)
@@ -357,8 +360,8 @@ private class FlowGraphMethodVisitor(
         // cold-flow builders and operator pipelines, not only StateFlow writes.
         if (traceColdFlows && name == "emit" && descriptor == FLOW_COLLECTOR_EMIT_DESCRIPTOR && isFlowCollectorOwner(owner)) {
             val continuationLocal = newLocal(Type.getType("Lkotlin/coroutines/Continuation;"))
-            val valueLocal = newLocal(Type.getType(Object::class.java))
-            val collectorLocal = newLocal(Type.getType(Object::class.java))
+            val valueLocal = newLocal(JVM_OBJECT_TYPE)
+            val collectorLocal = newLocal(JVM_OBJECT_TYPE)
             storeLocal(continuationLocal)
             storeLocal(valueLocal)
             storeLocal(collectorLocal)
@@ -379,9 +382,9 @@ private class FlowGraphMethodVisitor(
         // provide the exact observed propagation even for genuinely suspended calls.
         if (traceSuspendingEmits && name == "emit" && descriptor == SUSPENDING_EMIT_DESCRIPTOR && isMutableSharedFlowOwner(owner)) {
             val continuationLocal = newLocal(Type.getType("Lkotlin/coroutines/Continuation;"))
-            val valueLocal = newLocal(Type.getType(Object::class.java))
-            val flowLocal = newLocal(Type.getType(Object::class.java))
-            val resultLocal = newLocal(Type.getType(Object::class.java))
+            val valueLocal = newLocal(JVM_OBJECT_TYPE)
+            val flowLocal = newLocal(JVM_OBJECT_TYPE)
+            val resultLocal = newLocal(JVM_OBJECT_TYPE)
             storeLocal(continuationLocal)
             storeLocal(valueLocal)
             storeLocal(flowLocal)
@@ -407,7 +410,7 @@ private class FlowGraphMethodVisitor(
                 "()Ljava/lang/Object;",
                 false,
             )
-            ifCmp(Type.getType(Object::class.java), EQ, suspended)
+            ifCmp(JVM_OBJECT_TYPE, EQ, suspended)
             loadLocal(flowLocal)
             loadLocal(valueLocal)
             push("emit")
@@ -419,8 +422,8 @@ private class FlowGraphMethodVisitor(
         }
 
         if (name == "tryEmit" && descriptor == "(Ljava/lang/Object;)Z" && isMutableSharedFlowOwner(owner)) {
-            val valueLocal = newLocal(Type.getType(Object::class.java))
-            val flowLocal = newLocal(Type.getType(Object::class.java))
+            val valueLocal = newLocal(JVM_OBJECT_TYPE)
+            val flowLocal = newLocal(JVM_OBJECT_TYPE)
             val resultLocal = newLocal(Type.BOOLEAN_TYPE)
             storeLocal(valueLocal)
             storeLocal(flowLocal)
