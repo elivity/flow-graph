@@ -71,7 +71,13 @@ plugins {
 
 Remove the old explicit `debugImplementation("com.github.elivity:flow-graph:...")` line when upgrading.
 
-## 3. Optional Gradle Plugin Portal release
+## 3. Optional Gradle Plugin Portal release (manual, not part of CI)
+
+The GitHub Actions build and release workflows validate both JitPack modules by
+compiling them and publishing to the runner's local Maven repository. They do
+**not** run `publishPlugins` or require `GRADLE_PUBLISH_KEY` /
+`GRADLE_PUBLISH_SECRET`. JitPack itself publishes the runtime and Gradle plugin
+from the Git tag. The following Plugin Portal steps are optional and separate.
 
 For users who prefer no JitPack plugin mapping, you can also publish the same instrumentation plugin ID/version to the Gradle Plugin Portal:
 

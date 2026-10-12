@@ -37,5 +37,3 @@ jobs:
           done
           unzip -p "$HOME/.m2/repository/com/github/elivity/flow-graph/flowgraph-gradle-plugin/$VERSION/flowgraph-gradle-plugin-$VERSION.jar" \
             flowgraph-instrumentation.properties | grep -Fx "runtimeDependency=com.github.elivity.flow-graph:flowgraph-runtime:$VERSION"
-      - name: Validate Gradle Plugin Portal metadata
-        run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only

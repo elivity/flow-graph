@@ -45,25 +45,6 @@ jobs:
           done
           unzip -p "$HOME/.m2/repository/com/github/elivity/flow-graph/flowgraph-gradle-plugin/$VERSION/flowgraph-gradle-plugin-$VERSION.jar" \
             flowgraph-instrumentation.properties | grep -Fx "runtimeDependency=com.github.elivity.flow-graph:flowgraph-runtime:$VERSION"
-      - run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
-
-  publish-gradle-plugin:
-    needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.4.1'
-      - name: Publish instrumentation plugin to Gradle Plugin Portal
-        env:
-          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
-          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
-        run: gradle -p instrumentation :flowgraph-gradle-plugin:publishPlugins
 
   publish-marketplace:
     needs: verify
@@ -82,7 +63,7 @@ jobs:
 
   github-release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [publish-gradle-plugin, publish-marketplace]
+    needs: publish-marketplace
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

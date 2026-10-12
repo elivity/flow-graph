@@ -68,6 +68,21 @@ class ReleaseVersionConsistencyTest {
     }
 
     @Test
+    fun `ci verifies JitPack artifacts without Plugin Portal credentials`() {
+        for (filename in listOf(".github/workflows/build.yml", ".github/workflows/release.yml")) {
+            val workflow = Files.readString(Path.of(filename))
+            assertFalse("publishPlugins" in workflow,
+                "$filename must not require Gradle Plugin Portal credentials")
+            assertFalse("publish-gradle-plugin" in workflow,
+                "$filename must not depend on a Gradle Plugin Portal publishing job")
+            assertTrue(":flowgraph-runtime:publishToMavenLocal" in workflow,
+                "$filename must verify the JitPack runtime artifact")
+            assertTrue(":flowgraph-gradle-plugin:publishToMavenLocal" in workflow,
+                "$filename must verify the JitPack instrumentation artifact")
+        }
+    }
+
+    @Test
     fun `ci obtains version from root properties`() {
         for (filename in listOf(".github/workflows/build.yml", ".github/workflows/release.yml")) {
             val text = Files.readString(Path.of(filename))
