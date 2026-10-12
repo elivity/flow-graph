@@ -123,11 +123,10 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
         val a = layout.bounds[visualEdge.fromVisualId] ?: return@forEach
         val b = layout.bounds[visualEdge.toVisualId] ?: return@forEach
         if (visibleClip != null) {
-            // Use the union of both node rectangles as a conservative path bound. It keeps a
-            // long edge whose line crosses the viewport even when both endpoint nodes are just
-            // outside it, while avoiding all drawArrow work for distant lanes.
-            val edgePaintBounds = a.union(b).apply { grow(DRAW_CULL_MARGIN, DRAW_CULL_MARGIN) }
-            if (!visibleClip.intersects(edgePaintBounds)) return@forEach
+            // Routes may detour far outside the union of their endpoint rectangles. Cull on
+            // the actual painted path, otherwise edges vanish while panning around obstacles.
+            val pathBounds = routedPolylineBounds(nodeAvoidingRoute(edge, a, b))
+            if (pathBounds == null || !visibleClip.intersects(pathBounds)) return@forEach
         }
         val possibleContext = selected != null && isPossibleEdge(edge) &&
             (edge.from == selected || edge.to == selected ||

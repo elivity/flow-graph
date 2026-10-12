@@ -4,7 +4,6 @@ import com.oskiapps.flowgraph.model.FlowEdge
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Graphics2D
-import java.awt.Point
 import java.awt.Rectangle
 
 /** Connection direction is semantic: each FlowEdge travels from its producer to its consumer. */
@@ -15,17 +14,9 @@ internal fun GraphCanvas.drawConnectionPorts(
     consumer: Rectangle,
     dimmed: Boolean,
 ) {
-    val hasRepeatedInstances = cachedLayout?.sourceNodeIdByVisualId?.any { (visual, source) ->
-        visual != source
-    } == true
-    val route = when {
-        circuitViewEnabled && hasRepeatedInstances -> buildSingleCircuitRoute(edge, producer, consumer, 0)
-        circuitViewEnabled -> circuitRoutingCache?.routes?.get(edge)
-            ?: buildSingleCircuitRoute(edge, producer, consumer, 0)
-        else -> edgeLineFromBounds(edge, producer, consumer).let {
-            listOf(Point(it.x1, it.y1), Point(it.x2, it.y2))
-        }
-    }
+    // Sockets must share the exact geometry drawn and hit-tested for this visual
+    // instance. Canonical Circuit routes can belong to another duplicated node.
+    val route = nodeAvoidingRoute(edge, producer, consumer)
     if (route.size < 2) return
     val oldColor = graphics.color
     val oldStroke = graphics.stroke
