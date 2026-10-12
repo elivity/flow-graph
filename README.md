@@ -48,9 +48,17 @@ another StateFlow
 
 Flow Graph turns those relationships into a navigable graph and overlays runtime activity on top of it.
 
+### Compose discovery and navigation
+
+The **Compose views** layer in **All Flows** is built independently of Flow/StateFlow discovery. All production `@Composable` declarations (excluding preview and test sources), including screens not connected to any state, appear as nodes. Calls between source composables are resolved with Kotlin K2; `NavHost`, `NavGraphBuilder` helpers, navigation destinations and `setContent` entry points are included where their declarations resolve. A navigation destination or static call means **declared in source**, not that the screen was actually shown or recomposed.
+
+Flow-to-UI edges are added separately, only when the analyzer identifies an actual state-collection/reference site. Reading a Compose State value is distinguished from collecting or merely passing around a State object; possible relationships remain marked as possible. If Android Studio cannot resolve a call, the Composable declaration still appears, but its call edge may be omitted. The normal responsiveness caps may also truncate exceptionally large projects; the graph diagnostics report this.
+
+To see isolated screens, keep **Compose views** enabled and **Flow-influenced UI only** disabled. **Project composables only** hides framework layout details while preserving navigation destinations and the source hierarchy.
+
 ### Highlights
 
-- **All Flows view** — scan the project and see state relationships across the codebase. The overview uses separate left-to-right consumer lanes for both Flow and Compose: upstream Flow/State chains are repeated locally beside each consumer/screen when that avoids long cross-canvas connections.
+- **All Flows view** — independently scan production `@Composable` functions and Flow/State properties. Every discovered Compose screen remains visible even if it collects no Flow or Compose State. Static calls connect project composables, with navigation destinations (`composable`, `dialog`, `navigation`, `bottomSheet`) and `setContent` roots represented separately. The overview uses left-to-right lanes for Compose and StateFlow connections.
 - **Focused detail view** — click a node to isolate its upstream causes and downstream effects.
 - **K2 semantic analysis** — resolves Kotlin symbols and Flow APIs instead of relying on text/regex matching.
 - **Field-level propagation** — tracks fields through transformations such as `copy(...)`, `combine`, and mapped state where it can resolve provenance.
