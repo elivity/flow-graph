@@ -42,6 +42,7 @@ sealed interface ComposeRenderState {
 class ComposeRenderService(private val project: Project) {
     private val states = ConcurrentHashMap<String, ComposeRenderState>()
     private val requestTokens = ConcurrentHashMap<String, Long>()
+    private val pollTimers = ConcurrentHashMap<String, Timer>()
 
     fun state(nodeId: String): ComposeRenderState = states[nodeId] ?: ComposeRenderState.Idle
 
@@ -50,9 +51,12 @@ class ComposeRenderService(private val project: Project) {
 
     fun clear(nodeId: String? = null) {
         if (nodeId == null) {
+            pollTimers.values.forEach(Timer::stop)
+            pollTimers.clear()
             states.clear()
             requestTokens.clear()
         } else {
+            pollTimers.remove(nodeId)?.stop()
             states.remove(nodeId)
             requestTokens.remove(nodeId)
         }
@@ -90,6 +94,7 @@ class ComposeRenderService(private val project: Project) {
             return
         }
 
+        pollTimers.remove(node.id)?.stop()
         val requestedAt = System.currentTimeMillis()
         requestTokens[node.id] = requestedAt
         update(node.id, ComposeRenderState.Loading("Inspecting live Compose slot table…"), onUpdate)
@@ -100,9 +105,11 @@ class ComposeRenderService(private val project: Project) {
         }
 
         val timer = Timer(POLL_MS, null)
+        pollTimers[node.id] = timer
         timer.addActionListener {
             if (requestTokens[node.id] != requestedAt) {
                 timer.stop()
+                pollTimers.remove(node.id, timer)
                 return@addActionListener
             }
 
@@ -114,6 +121,7 @@ class ComposeRenderService(private val project: Project) {
 
             if (event != null) {
                 timer.stop()
+                pollTimers.remove(node.id, timer)
                 if (event.kind == "compose-image-error") {
                     update(node.id, ComposeRenderState.Failed(event.valueSummary ?: "Live Compose inspection failed."), onUpdate)
                 } else {
@@ -129,6 +137,7 @@ class ComposeRenderService(private val project: Project) {
 
             if (System.currentTimeMillis() - requestedAt >= REQUEST_TIMEOUT_MS) {
                 timer.stop()
+                pollTimers.remove(node.id, timer)
                 update(
                     node.id,
                     ComposeRenderState.Failed(

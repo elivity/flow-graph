@@ -173,8 +173,14 @@ internal fun FlowGraphPanel.jumpToCurrentPhoneComposable() {
         return
     }
 
+    currentUiTimer?.stop()
     val timer = Timer(100, null)
+    currentUiTimer = timer
     timer.addActionListener {
+        if (isShutDown) {
+            timer.stop()
+            return@addActionListener
+        }
         if (currentComposeRequestStartedAt != requestedAt) {
             timer.stop()
             return@addActionListener

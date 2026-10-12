@@ -72,11 +72,16 @@ internal fun FlowGraphPanel.configureAdbReverse() {
             val adb = sdk?.let { "$it/platform-tools/adb" } ?: "adb"
             fun run(vararg args: String): Pair<Int, String> {
                 val process = ProcessBuilder(listOf(adb) + args).redirectErrorStream(true).start()
-                if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
-                    process.destroyForcibly()
-                    error("ADB command timed out")
+                panel.adbProcesses.add(process)
+                try {
+                    if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                        error("ADB command timed out")
+                    }
+                    return process.exitValue() to process.inputStream.bufferedReader().readText().trim()
+                } finally {
+                    panel.adbProcesses.remove(process)
+                    if (process.isAlive) process.destroyForcibly()
                 }
-                return process.exitValue() to process.inputStream.bufferedReader().readText().trim()
             }
             val (exit, output) = run("devices")
             if (exit != 0) error(output.ifBlank { "Unable to execute adb" })
@@ -88,6 +93,7 @@ internal fun FlowGraphPanel.configureAdbReverse() {
         }
 
         override fun done() {
+            if (panel.isShutDown) return
             adbReverse.isEnabled = true
             try {
                 val (devices, adb) = get()
@@ -110,16 +116,22 @@ internal fun FlowGraphPanel.configureAdbReverse() {
                         val process = ProcessBuilder(adb, "-s", device, "reverse",
                             "tcp:$port", "tcp:$port")
                             .redirectErrorStream(true).start()
-                        if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
-                            process.destroyForcibly()
-                            error("ADB reverse timed out")
+                        panel.adbProcesses.add(process)
+                        try {
+                            if (!process.waitFor(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                                error("ADB reverse timed out")
+                            }
+                            val output = process.inputStream.bufferedReader().readText().trim()
+                            if (process.exitValue() != 0) error(output.ifBlank { "adb reverse failed" })
+                            return "ADB reverse configured for $device on port $port."
+                        } finally {
+                            panel.adbProcesses.remove(process)
+                            if (process.isAlive) process.destroyForcibly()
                         }
-                        val output = process.inputStream.bufferedReader().readText().trim()
-                        if (process.exitValue() != 0) error(output.ifBlank { "adb reverse failed" })
-                        return "ADB reverse configured for $device on port $port."
                     }
 
                     override fun done() {
+                        if (panel.isShutDown) return
                         adbReverse.isEnabled = true
                         try {
                             JOptionPane.showMessageDialog(panel, get(),

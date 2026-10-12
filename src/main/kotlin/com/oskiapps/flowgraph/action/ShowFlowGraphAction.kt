@@ -14,6 +14,7 @@ import com.intellij.util.concurrency.AppExecutorUtil
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer
 import com.oskiapps.flowgraph.analysis.analyzeFrom
 import com.oskiapps.flowgraph.service.FlowGraphProjectService
+import com.oskiapps.flowgraph.ui.FlowGraphSessionHost
 
 class ShowFlowGraphAction : AnAction() {
     override fun update(e: AnActionEvent) {
@@ -33,6 +34,8 @@ class ShowFlowGraphAction : AnAction() {
         val offset = editor.caretModel.offset.coerceAtMost((psiFile.textLength - 1).coerceAtLeast(0))
         val element = psiFile.findElementAt(offset) ?: return
 
+        val graphs = project.getService(FlowGraphProjectService::class.java)
+        val session = graphs.sessionId()
         val pointer = SmartPointerManager.getInstance(project).createSmartPsiElementPointer(element)
         ReadAction.nonBlocking<com.oskiapps.flowgraph.model.FlowGraph> {
             val current = pointer.element
@@ -47,6 +50,7 @@ class ShowFlowGraphAction : AnAction() {
             .inSmartMode(project)
             .expireWith(project)
             .finishOnUiThread(ModalityState.defaultModalityState()) { graph ->
+                if (graphs.sessionId() != session) return@finishOnUiThread
                 if (graph.nodes.isEmpty()) {
                     Messages.showInfoMessage(
                         project,
@@ -54,8 +58,11 @@ class ShowFlowGraphAction : AnAction() {
                         "Flow Graph",
                     )
                 } else {
-                    project.getService(FlowGraphProjectService::class.java).publish(graph)
-                    ToolWindowManager.getInstance(project).getToolWindow("Flow Graph")?.show()
+                    val window = ToolWindowManager.getInstance(project).getToolWindow("Flow Graph")
+                    (window?.contentManager?.getContent(0)?.component as? FlowGraphSessionHost)
+                        ?.startSession()
+                    graphs.publish(graph)
+                    window?.show()
                 }
             }
             .submit(AppExecutorUtil.getAppExecutorService())
