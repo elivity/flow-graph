@@ -1,3 +1,9 @@
+## 0.20.10 — Remove Kotlin JVM Object type warnings in instrumentation
+
+- Replace 16 references to Java `Object::class.java` in the ASM visitor with the Kotlin `Any`-backed JVM object type.
+- Preserve the emitted `Ljava/lang/Object;` descriptors and instrumentation behavior; no app-side API changes.
+- Keep Android Studio Rabbit 1 (`262.*`) compatibility and the paired Gradle/runtime artifacts on the same release version.
+
 ## 0.20.9 — Android Studio Rabbit 1 compatibility
 
 - Expand the IDE plugin compatibility upper bound to IntelliJ Platform `262.*` (Android Studio Rabbit 1 / 2026.2.1), retaining the existing Panda 4 minimum build.
