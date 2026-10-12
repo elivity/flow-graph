@@ -11,7 +11,7 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
-**Current release: 0.20.8** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+**Source version: 0.20.8** (publication status must be verified separately) · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
 
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
@@ -81,32 +81,46 @@ Flow Graph uses the `com.oskiapps.flowgraph` namespace. The Android instrumentat
 id("com.oskiapps.flowgraph.instrumentation")
 ```
 
-The Android Studio plugin, Gradle instrumentation plugin, and Android runtime live in **one repository**, but are separate build modules. The Gradle plugin and runtime are published as **two JitPack artifacts** from the same Git tag, and the plugin injects the matching runtime into the app's debug variant.
+The Android Studio plugin, Gradle instrumentation plugin, and Android runtime live in **one repository**, but are separate build modules. The Gradle plugin and runtime are **configured for publication** as two JitPack artifacts from the same Git tag. Once published, the plugin injects the matching runtime into the app's debug variant.
 
 ## Installation
 
-Flow Graph has three pieces, each distributed through the normal ecosystem for that component:
+Choose the setup for the features you need. **Static Flow/StateFlow and Compose analysis requires only the Android Studio IDE plugin.** Do not modify your Android app's Gradle files or manifest for static analysis.
 
-| Component | Distribution |
+| Feature | What to install |
 | --- | --- |
-| Android Studio plugin | JetBrains Marketplace |
-| Gradle instrumentation plugin | JitPack (Gradle Plugin Portal remains an optional channel) |
-| Debug runtime | JitPack (injected automatically for debug builds) |
+| Static Flow, StateFlow, SharedFlow and Compose hierarchy analysis | **IDE plugin only** |
+| Live tracing of a running debug app | **IDE plugin + Gradle instrumentation plugin + debug runtime** |
 
-### 1. Install the Android Studio plugin
+The source tree is at **0.20.8**, but **a source version, Git tag, local ZIP, or JitPack badge is not proof that an installable release exists**. Before installing from a remote repository, verify that the corresponding version is actually available there. See [Publishing](PUBLISHING.md) for the release process.
 
-In Android Studio:
+### A. Static analysis — IDE plugin only
 
-**Settings → Plugins → Marketplace → search `Flow Graph` → Install**
+**Local/development installation (available from the source checkout):**
 
-For development builds you can also use **Settings → Plugins → ⚙ → Install Plugin from Disk…** and select the ZIP produced by `./gradlew buildPlugin`.
+1. Build the IDE plugin with `./gradlew buildPlugin` (the IDE project uses JDK 21).
+2. In Android Studio, open **Settings → Plugins → ⚙ → Install Plugin from Disk…**.
+3. Select the plugin ZIP under `build/distributions/` and restart Android Studio if prompted.
 
-### 2. Resolve the two JitPack modules
+**JetBrains Marketplace (only after a release is published):** Use **Settings → Plugins → Marketplace**, search for **Flow Graph**, and install a compatible published version. Do not assume Marketplace has version `0.20.8` just because the source uses that version.
 
-The app no longer needs an absolute `includeBuild(".../instrumentation")` path. For a tagged **0.20.8** release, configure both Gradle plugin resolution and ordinary dependencies:
+You can now use **Show Flow Graph** and **Load all flows** for static analysis, including independent production `@Composable` discovery. No JitPack repository, Gradle instrumentation plugin, runtime dependency, or `INTERNET` permission is required for this path.
+
+### B. Live tracing — additional Android app setup
+
+The following steps are **only for Live runtime tracing**. They assume that the **`0.20.8` JitPack build has succeeded** for *both* artifacts:
+
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.8`
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8`
+
+Check the build and artifact availability at [JitPack — elivity/flow-graph](https://jitpack.io/#elivity/flow-graph) **before** using these coordinates. If they are not published yet, use the [local development fallback](#local-development-fallback-before-jitpack-publication) below instead.
+
+#### 1. Configure Gradle plugin and dependency repositories
+
+**Merge** these entries into your Android app's existing **`settings.gradle.kts`**. Do **not** paste a second `pluginManagement` or `dependencyResolutionManagement` block alongside an existing one. Keep any existing repositories, repository policies, and unrelated plugin-resolution rules.
 
 ```kotlin
-// settings.gradle.kts (in the Android app consuming Flow Graph)
+// settings.gradle.kts — merge into existing blocks
 pluginManagement {
     repositories {
         google()
@@ -114,7 +128,6 @@ pluginManagement {
         gradlePluginPortal()
         maven("https://jitpack.io")
     }
-    // JitPack publishes the plugin implementation, not a Gradle plugin marker.
     resolutionStrategy {
         eachPlugin {
             if (requested.id.id == "com.oskiapps.flowgraph.instrumentation") {
@@ -133,29 +146,22 @@ dependencyResolutionManagement {
 }
 ```
 
-`pluginManagement.resolutionStrategy` is required **only for JitPack plugin resolution**. JitPack does not use the Gradle Plugin Portal's plugin-marker coordinates. If you publish the same version to the Plugin Portal, you may omit this mapping and JitPack from `pluginManagement.repositories`; JitPack is still required in normal dependency repositories for the runtime.
+The `resolutionStrategy` maps the instrumentation **plugin ID** to JitPack's **implementation module**; it is not needed if you instead install a corresponding published version from the **Gradle Plugin Portal**. The runtime still needs JitPack in ordinary dependency repositories unless you publish it elsewhere.
 
-### 3. Enable instrumentation in the Android application module
+#### 2. Apply instrumentation to the Android application module
 
 ```kotlin
 // app/build.gradle.kts
 plugins {
     id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
 }
-
-// The plugin adds the matching flowgraph-runtime to debugImplementation automatically.
-// Do not add the old com.github.elivity:flow-graph dependency manually.
 ```
 
-For centralized plugin versions, declare the same plugin with `apply false` in the root build file, then apply its ID without a version in the Android application module.
+If your project centralizes plugin versions in the root build file or a version catalog, use that existing convention rather than declaring the version twice. The plugin adds the matching `flowgraph-runtime` artifact to **`debugImplementation`** automatically and instruments **debug** builds, not release builds. Do not also add the old `com.github.elivity:flow-graph` runtime dependency: it can conflict with the injected runtime.
 
-**Migrating from older builds:** Remove any explicit `debugImplementation("com.github.elivity:flow-graph:...")` dependency; otherwise the plugin will report a legacy dependency conflict rather than bundle duplicate runtime classes. The injected runtime is `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8`. Only the debug build type is instrumented or receives the runtime; no app `INTERNET` permission is added automatically.
+#### 3. Allow the debug runtime to use its localhost socket
 
-### 4. Grant the Android client permission for live tracing
-
-The **Android app being inspected** needs the `INTERNET` permission for Flow Graph's **Live** runtime tracing. Android requires this permission to create TCP sockets **even when connecting to `127.0.0.1`**. Flow Graph's debug runtime opens a socket to port `50737` to send trace events to the Android Studio plugin (and receive inspection commands); it does **not** require an external Internet or cloud connection.
-
-If the app does not already declare this permission, add it to **`app/src/debug/AndroidManifest.xml`** so only debug builds receive it:
+If the app does not already declare `android.permission.INTERNET`, add it to **`app/src/debug/AndroidManifest.xml`**, so release builds do not acquire the permission solely for tracing:
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -163,19 +169,34 @@ If the app does not already declare this permission, add it to **`app/src/debug/
 </manifest>
 ```
 
-If your app already has `INTERNET` in its merged manifest, you do not need to add it again. This is a normal Android install-time permission: **no runtime permission dialog** is needed. Without it, Android can reject the debug runtime's socket connection and the **Live** graph will receive no trace events; static graph analysis does not need this permission.
+Android requires this install-time permission even for TCP to **`127.0.0.1:50737`**. Flow Graph uses the socket through `adb reverse` to exchange trace data with the IDE; it does **not** need cloud access, and Android does **not** show a runtime permission prompt. If the permission is already present in the merged manifest, don't add it again.
 
-### 5. Connect live tracing
+#### 4. Connect a device or emulator
 
-Run the debug app on a device/emulator and reverse the local trace port:
+Run the **debug** app, then use:
 
 ```bash
 adb reverse tcp:50737 tcp:50737
 ```
 
-Then turn on **Live** in the Flow Graph tool window.
+Enable **Live** in the Flow Graph tool window. Without the instrumentation plugin/runtime and socket permission, **static analysis still works**, but Live trace events will not arrive.
 
-The runtime transport uses `127.0.0.1:50737`; no cloud service is required for live tracing.
+### Local development fallback before JitPack publication
+
+If the `0.20.8` JitPack artifacts are not available yet, you can build and publish both modules to your **local Maven repository** from a Flow Graph source checkout:
+
+```bash
+./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
+  :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
+```
+
+Then add **`mavenLocal()` before remote repositories** in both `pluginManagement.repositories` and `dependencyResolutionManagement.repositories` in your app's `settings.gradle.kts`. Keep the same `resolutionStrategy` and `plugins` declaration shown above; the local artifacts use the same version and Maven coordinates. You do **not** need a machine-specific `includeBuild("/home/.../instrumentation")` path for this approach. Re-publish locally when you change the instrumentation modules.
+
+### Build compatibility and requirements
+
+The source currently configures **Android Studio 2025.3.4.7 / IntelliJ build 253** and **JDK 21** for building the IDE plugin; the repository's Gradle wrapper is **9.0.0**. The instrumentation plugin compiles against the **Android Gradle Plugin 9.3.2 API** with **JDK 17**, and `jitpack.yml` requests **Gradle 9.4.1** to build the Android-side modules. These are **project configuration values, not a guarantee that other Android Studio, AGP, Gradle, or JDK combinations have been tested**. Verify compatibility with your app's toolchain before relying on Live instrumentation.
+
+For advanced options, see [instrumentation/README.md](instrumentation/README.md) and [the detailed installation guide](docs/INSTALL.md).
 
 ---
 
