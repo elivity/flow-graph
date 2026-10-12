@@ -2,15 +2,13 @@
 
 package com.oskiapps.flowgraph.analysis
 
-import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.ComposeTopologyEdge
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.ComposeVisualCall
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.COMPOSE_DSL_SCOPE_TYPES
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.LAZY_COMPOSE_DSL_CALLS
+import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.NAVIGATION_DSL_CALLS
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_ALL_COMPOSE_CANDIDATE_CALLS
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE
-import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_ALL_COMPOSE_TOPOLOGY_DISCOVERED_EDGES
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_ALL_COMPOSE_TOPOLOGY_EDGES
-import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_ALL_COMPOSE_TOPOLOGY_NEW_NODES
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_COMPOSE_CALL_DEPTH
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION
 import com.oskiapps.flowgraph.analysis.AnalysisApiFlowAnalyzer.Companion.MAX_COMPOSE_NODES
@@ -76,12 +74,15 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
     allowedSourceNames: Set<String>? = null,
     maxGraphNodes: Int = Int.MAX_VALUE,
     maxComposeNodes: Int = MAX_COMPOSE_NODES,
-) {
-    if (
+    maxGraphEdges: Int = Int.MAX_VALUE,
+    maxCandidateCalls: Int = MAX_COMPOSE_VISUAL_CALLS_PER_BODY,
+): Int {
+    if (maxCandidateCalls <= 0 ||
         depth >= MAX_COMPOSE_CALL_DEPTH ||
         nodes.size >= maxGraphNodes ||
-        nodes.count { it.value.kind == NodeKind.COMPOSABLE } >= maxComposeNodes
-    ) return
+        (maxComposeNodes != Int.MAX_VALUE &&
+            nodes.count { it.value.kind == NodeKind.COMPOSABLE } >= maxComposeNodes)
+    ) return 0
 
     // Keep the actual composition nesting instead of flattening every descendant call back to
     // the owning source function. This is what makes a graph read naturally as:
@@ -102,11 +103,12 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
             allowedSourceNames == null ||
                 name in allowedSourceNames ||
                 name.firstOrNull()?.isUpperCase() == true ||
-                name in LAZY_COMPOSE_DSL_CALLS
+                name in LAZY_COMPOSE_DSL_CALLS ||
+                name in NAVIGATION_DSL_CALLS
         }
-        .take(MAX_COMPOSE_VISUAL_CALLS_PER_BODY)
+        .take(minOf(maxCandidateCalls, MAX_COMPOSE_VISUAL_CALLS_PER_BODY))
         .toList()
-    if (candidates.isEmpty()) return
+    if (candidates.isEmpty()) return 0
 
     val resolved = FlowSemantics.resolvedFunctionCalls(candidates)
     val visualCalls = candidates.mapNotNull { call ->
@@ -122,6 +124,12 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
                 sourceFunction = sourceTarget,
             )
 
+            isNavigationComposeCall(call, info) -> ComposeVisualCall(
+                call = call,
+                node = composeNavigationCallNode(call),
+                sourceFunction = null,
+            )
+
             isFrameworkVisualComposeCall(call, info) -> ComposeVisualCall(
                 call = call,
                 node = composeFrameworkCallNode(call, info?.callableId),
@@ -131,13 +139,16 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
             else -> null
         }
     }
-    if (visualCalls.isEmpty()) return
+    if (visualCalls.isEmpty()) return candidates.size
 
     val visualByCall = visualCalls.associateBy { it.call }
     visualCalls.forEach { visual ->
+        if (edges.size >= maxGraphEdges) return@forEach
         if (
             visual.node.id !in nodes &&
-            (nodes.size >= maxGraphNodes || nodes.count { it.value.kind == NodeKind.COMPOSABLE } >= maxComposeNodes)
+            (nodes.size >= maxGraphNodes ||
+                (maxComposeNodes != Int.MAX_VALUE &&
+                    nodes.count { it.value.kind == NodeKind.COMPOSABLE } >= maxComposeNodes))
         ) return@forEach
         nodes.putIfAbsent(visual.node.id, visual.node)
 
@@ -164,7 +175,7 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
         )
     }
 
-    if (!expandSourceBodies) return
+    if (!expandSourceBodies) return candidates.size
     visualCalls.mapNotNull { it.sourceFunction }.distinctBy(::composeSourceId).forEach { target ->
         if (visited.add(target)) {
             addComposableChildren(
@@ -177,6 +188,7 @@ internal fun AnalysisApiFlowAnalyzer.addComposableChildrenFromBody(
             )
         }
     }
+    return candidates.size
 }
 
 
@@ -190,7 +202,10 @@ internal fun AnalysisApiFlowAnalyzer.isFrameworkVisualComposeCall(call: KtCallEx
         // Namespace + PascalCase is not enough: value factories/constructors such as Offset(...),
         // Color(...), DpSize(...), etc. also live under androidx.compose and previously appeared as
         // fake composition nodes. Only a callable that actually carries @Composable belongs here.
-        return info?.isComposable == true && callableId.startsWith("androidx.compose.")
+        return info?.isComposable == true && (
+            callableId.startsWith("androidx.compose.") ||
+                callableId.startsWith("androidx.navigation.compose.")
+        )
     }
 
     // Lazy layout item builders are deliberately *not* @Composable themselves. Their content
@@ -258,186 +273,156 @@ internal fun AnalysisApiFlowAnalyzer.composeFrameworkCallNode(call: KtCallExpres
 
 
 
-internal fun AnalysisApiFlowAnalyzer.addProjectComposeTopology(
-    nodes: MutableMap<String, FlowNode>,
-    edges: MutableSet<FlowEdge>,
-    diagnostics: MutableList<String>,
-    composables: List<KtNamedFunction>,
-    maxGraphNodes: Int,
-) {
-    val anchoredComposeIds = nodes.values
-        .asSequence()
-        .filter { it.kind == NodeKind.COMPOSABLE }
-        .map { it.id }
-        .toCollection(linkedSetOf())
-    if (anchoredComposeIds.isEmpty() || composables.isEmpty()) return
-
-    val functionsById = composables.associateBy(::composeSourceId)
-    val composableNames = composables.asSequence().mapNotNull { it.name }.toHashSet()
-    if (composableNames.isEmpty()) return
-
-    val topologyEdges = linkedMapOf<Pair<String, String>, ComposeTopologyEdge>()
-    val adjacency = linkedMapOf<String, LinkedHashSet<String>>()
-    var functionsScanned = 0
-    var candidateCallsResolved = 0
-    var candidateCallLimitHits = 0
-    var globalCandidateCallLimitHit = false
-    var topologyEdgeDiscoveryTruncated = false
-
-    fun recordEdge(fromId: String, toId: String, source: SourceLocation?) {
-        // Keep direct recursion as real composition topology. The visual lane builder already
-        // stops expansion when a canonical composable repeats on the current path.
-        val key = fromId to toId
-        if (key !in topologyEdges && topologyEdges.size >= MAX_ALL_COMPOSE_TOPOLOGY_DISCOVERED_EDGES) {
-            topologyEdgeDiscoveryTruncated = true
-            return
-        }
-        topologyEdges.putIfAbsent(key, ComposeTopologyEdge(fromId, toId, source))
-        adjacency.getOrPut(fromId) { linkedSetOf() }.add(toId)
-        adjacency.getOrPut(toId) { linkedSetOf() }.add(fromId)
-    }
-
-    fun analyzeBody(
-        body: PsiElement,
-        fromId: String,
-        ownerFunction: KtNamedFunction?,
-    ) {
-        ProgressManager.checkCanceled()
-        val globalRemaining = MAX_ALL_COMPOSE_CANDIDATE_CALLS - candidateCallsResolved
-        if (globalRemaining <= 0) {
-            globalCandidateCallLimitHit = true
-            return
-        }
-        val perBodyLimit = minOf(MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION, globalRemaining)
-        val candidatesWithSentinel = PsiTreeUtil.collectElementsOfType(body, KtCallExpression::class.java)
-            .asSequence()
-            .filter { call ->
-                val calleeName = call.calleeExpression?.text ?: return@filter false
-                calleeName in composableNames
-            }
-            .filter { call ->
-                ownerFunction == null ||
-                    PsiTreeUtil.getParentOfType(call, KtNamedFunction::class.java, true) == ownerFunction
-            }
-            .take(perBodyLimit + 1)
-            .toList()
-        if (candidatesWithSentinel.size > perBodyLimit) {
-            if (perBodyLimit < MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION) globalCandidateCallLimitHit = true
-            else candidateCallLimitHits++
-        }
-        val candidates = candidatesWithSentinel.take(perBodyLimit)
-        if (candidates.isEmpty()) return
-
-        // One K2 analysis session per source function/host instead of one per call.
-        val resolved = FlowSemantics.sourceFunctions(candidates)
-        candidateCallsResolved += candidates.size
-        candidates.forEach { call ->
-            val target = resolved[call] ?: return@forEach
-            val targetId = composeSourceId(target)
-            if (targetId !in functionsById) return@forEach
-            recordEdge(fromId, targetId, sourceLocation(call))
-        }
-    }
-
-    // Deterministic order keeps both graph shape and truncation behavior stable across runs.
-    for (function in composables.sortedBy(::composeSourceId).take(MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE)) {
-        ProgressManager.checkCanceled()
-        if (candidateCallsResolved >= MAX_ALL_COMPOSE_CANDIDATE_CALLS) {
-            globalCandidateCallLimitHit = true
-            break
-        }
-        functionsScanned++
-        val body = function.bodyExpression ?: continue
-        analyzeBody(body, composeSourceId(function), function)
-    }
-
-
-    if (topologyEdges.isEmpty()) return
-
-    // Traverse the call graph as an undirected topology from state-connected Compose anchors.
-    // This finds callers as well as callees, which is what joins formerly independent islands.
-    val remainingGraphSlots = (maxGraphNodes - nodes.size).coerceAtLeast(0)
-    val maxNewComposeNodes = minOf(MAX_ALL_COMPOSE_TOPOLOGY_NEW_NODES, remainingGraphSlots)
-    val maxRetainedNodes = anchoredComposeIds.size + maxNewComposeNodes
-    val retained = linkedSetOf<String>()
-    val queue = ArrayDeque<String>()
-    anchoredComposeIds.sorted().forEach(queue::addLast)
-
-    var topologyTruncated = false
-    while (queue.isNotEmpty()) {
-        ProgressManager.checkCanceled()
-        val id = queue.removeFirst()
-        if (id in retained) continue
-        if (retained.size >= maxRetainedNodes && id !in anchoredComposeIds) {
-            topologyTruncated = true
-            continue
-        }
-        retained += id
-        adjacency[id].orEmpty().forEach { neighbor ->
-            if (neighbor !in retained) queue.addLast(neighbor)
-        }
-    }
-
-    var addedNodes = 0
-    retained.forEach { id ->
-        if (id in nodes) return@forEach
-        if (nodes.size >= maxGraphNodes) {
-            topologyTruncated = true
-            return@forEach
-        }
-        val node = functionsById[id]?.let(::composeSourceNode) ?: return@forEach
-        nodes[id] = node
-        addedNodes++
-    }
-
-    // The source-only topology above exists to discover the connected UI surface (including
-    // callers that do not themselves collect state). Once that surface is known, rebuild the
-    // visible COMPOSES edges from each retained function body with framework call sites in the
-    // middle. That avoids the old flattened Screen -> Child shortcut when the real structure is
-    // Screen -> LazyVerticalGrid -> Child.
-    val composeEdgesBefore = edges.count { it.kind == EdgeKind.COMPOSES }
-    val composeNodesBefore = nodes.count { it.value.kind == NodeKind.COMPOSABLE }
-    val retainedSourceNames = retained.asSequence()
-        .mapNotNull { id -> functionsById[id]?.name }
-        .toSet()
-    retained.asSequence()
-        .mapNotNull { id -> functionsById[id] }
-        .sortedBy { function -> composeSourceId(function) }
-        .forEach { function ->
-            if (nodes.size >= maxGraphNodes) {
-                topologyTruncated = true
-                return@forEach
-            }
-            val body = function.bodyExpression ?: return@forEach
-            addComposableChildrenFromBody(
-                nodes = nodes,
-                edges = edges,
-                body = body,
-                functionId = composeSourceId(function),
-                currentFunction = function,
-                depth = 0,
-                visited = linkedSetOf(function),
-                expandSourceBodies = false,
-                allowedSourceIds = retained,
-                allowedSourceNames = retainedSourceNames,
-                maxGraphNodes = maxGraphNodes,
-                maxComposeNodes = Int.MAX_VALUE,
-            )
-        }
-    val addedEdges = (edges.count { it.kind == EdgeKind.COMPOSES } - composeEdgesBefore).coerceAtLeast(0)
-    val addedFrameworkNodes = (nodes.count { it.value.kind == NodeKind.COMPOSABLE } - composeNodesBefore).coerceAtLeast(0)
-    if (addedEdges >= MAX_ALL_COMPOSE_TOPOLOGY_EDGES) topologyTruncated = true
-
-    diagnostics += "Compose topology: scanned $functionsScanned project Compose source functions, resolved $candidateCallsResolved candidate calls, connected $addedNodes additional source UI nodes plus $addedFrameworkNodes framework call sites with $addedEdges composition edges."
-    if (
-        composables.size > MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE ||
-        candidateCallLimitHits > 0 ||
-        globalCandidateCallLimitHit ||
-        topologyEdgeDiscoveryTruncated ||
-        topologyTruncated
-    ) {
-        diagnostics += "Compose topology was bounded for IDE responsiveness (functions=$MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE, calls/function=$MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION, total calls=$MAX_ALL_COMPOSE_CANDIDATE_CALLS, discovered edges=$MAX_ALL_COMPOSE_TOPOLOGY_DISCOVERED_EDGES, new nodes=$MAX_ALL_COMPOSE_TOPOLOGY_NEW_NODES, visible edges=$MAX_ALL_COMPOSE_TOPOLOGY_EDGES). Focus a composable for a smaller local detail analysis."
-    }
+/** Navigation declarations are not necessarily @Composable functions themselves. */
+internal fun AnalysisApiFlowAnalyzer.isNavigationComposeCall(
+    call: KtCallExpression,
+    info: ResolvedFunctionCall?,
+): Boolean {
+    val name = call.calleeExpression?.text ?: return false
+    return name in NAVIGATION_DSL_CALLS && (
+        info?.callableId?.startsWith("androidx.navigation.") == true ||
+            info?.callableId?.startsWith("androidx.compose.material.navigation.") == true
+    )
 }
 
+internal fun AnalysisApiFlowAnalyzer.composeNavigationCallNode(call: KtCallExpression): FlowNode {
+    val name = call.calleeExpression?.text ?: "destination"
+    val routeArgument = call.valueArguments.firstOrNull { arg ->
+        arg.getArgumentName()?.asName?.asString() == "route"
+    } ?: call.valueArguments.firstOrNull()
+    val route = call.typeArgumentList?.arguments?.firstOrNull()?.text
+        ?: routeArgument?.getArgumentExpression()?.text?.take(70)
+    val routeLabel = route?.trim('"')?.takeIf { it.isNotBlank() }
+    val label = if (routeLabel == null) name else "$name: $routeLabel"
+    val id = "compose-nav:${call.containingKtFile.virtualFile.path}:${call.textOffset}"
+    return FlowNode(
+        id = id,
+        label = label,
+        detail = "Navigation destination declaration • ${sourceDetail(call)} • static, may be conditional",
+        kind = NodeKind.COMPOSABLE,
+        source = sourceLocation(call),
+        groupKey = id,
+        groupLabel = label,
+        groupKind = NodeGroupKind.COMPOSE,
+    )
+}
 
+/**
+ * Independent production Compose scan. There is deliberately no StateFlow/Compose-State anchor:
+ * even a project with zero Flow properties exposes its entire declared @Composable UI surface.
+ * COMPOSES is a static (possibly conditional) call edge, never proof that a destination actually
+ * appeared on screen. Flow-to-Compose edges come only from the separate state-consumer analysis.
+ */
+internal fun AnalysisApiFlowAnalyzer.analyzeProjectComposables(
+    composables: List<KtNamedFunction>,
+    composeHosts: List<KtCallExpression>,
+    maxGraphNodes: Int,
+): FlowGraph {
+    val nodes = linkedMapOf<String, FlowNode>()
+    val edges = linkedSetOf<FlowEdge>()
+    val diagnostics = mutableListOf<String>()
+    val sorted = composables.sortedBy(::composeSourceId)
+    val sourceFunctions = sorted.take(minOf(MAX_ALL_COMPOSE_FUNCTIONS_TO_ANALYZE, maxGraphNodes))
+
+    // Materialize *every* eligible source declaration before processing call sites. This makes
+    // disconnected screens, leaf composables and isolated navigation destinations visible.
+    sourceFunctions.forEach { function ->
+        ProgressManager.checkCanceled()
+        val node = composeSourceNode(function)
+        nodes[node.id] = node
+    }
+    val admittedIds = nodes.keys.toSet()
+    val admittedNames = sourceFunctions.mapNotNullTo(hashSetOf()) { it.name }
+    var analyzedBodies = 0
+    var candidateCallsResolved = 0
+    var truncated = sourceFunctions.size < composables.size
+
+    // Source calls, framework UI nesting, and navigation destination declarations are analyzed
+    // from actual PSI call sites. Only K2-resolved project targets get project-call edges.
+    for (function in sourceFunctions) {
+        ProgressManager.checkCanceled()
+        if (edges.size >= MAX_ALL_COMPOSE_TOPOLOGY_EDGES ||
+            candidateCallsResolved >= MAX_ALL_COMPOSE_CANDIDATE_CALLS
+        ) {
+            truncated = true
+            break
+        }
+        val body = function.bodyExpression ?: continue
+        analyzedBodies++
+        candidateCallsResolved += addComposableChildrenFromBody(
+            nodes = nodes,
+            edges = edges,
+            body = body,
+            functionId = composeSourceId(function),
+            currentFunction = function,
+            depth = 0,
+            visited = linkedSetOf(function),
+            expandSourceBodies = false,
+            allowedSourceIds = admittedIds,
+            allowedSourceNames = admittedNames,
+            maxGraphNodes = maxGraphNodes,
+            maxComposeNodes = Int.MAX_VALUE,
+            maxGraphEdges = MAX_ALL_COMPOSE_TOPOLOGY_EDGES,
+            maxCandidateCalls = minOf(
+                MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION,
+                MAX_ALL_COMPOSE_CANDIDATE_CALLS - candidateCallsResolved,
+            ),
+        )
+    }
+
+    // Explicit Activity/ComposeView setContent calls anchor the otherwise source-only UI graph.
+    // A host is a declarative entry point, not evidence of an observed composition.
+    for (call in composeHosts.sortedBy { it.containingKtFile.virtualFile.path + ":" + it.textOffset }) {
+        ProgressManager.checkCanceled()
+        if (nodes.size >= maxGraphNodes || edges.size >= MAX_ALL_COMPOSE_TOPOLOGY_EDGES ||
+            candidateCallsResolved >= MAX_ALL_COMPOSE_CANDIDATE_CALLS
+        ) {
+            truncated = true
+            break
+        }
+        val lambda = call.lambdaArguments.firstOrNull()?.getLambdaExpression()
+            ?: call.valueArguments.firstNotNullOfOrNull { it.getArgumentExpression() as? KtLambdaExpression }
+            ?: continue
+        val host = composeHostNode(lambda, call)
+        nodes.putIfAbsent(host.id, host)
+        candidateCallsResolved += addComposableChildrenFromBody(
+            nodes = nodes,
+            edges = edges,
+            body = lambda.bodyExpression ?: lambda,
+            functionId = host.id,
+            currentFunction = null,
+            depth = 0,
+            visited = linkedSetOf(),
+            expandSourceBodies = false,
+            allowedSourceIds = admittedIds,
+            allowedSourceNames = admittedNames,
+            maxGraphNodes = maxGraphNodes,
+            maxComposeNodes = Int.MAX_VALUE,
+            maxGraphEdges = MAX_ALL_COMPOSE_TOPOLOGY_EDGES,
+            maxCandidateCalls = minOf(
+                MAX_COMPOSE_CANDIDATE_CALLS_PER_FUNCTION,
+                MAX_ALL_COMPOSE_CANDIDATE_CALLS - candidateCallsResolved,
+            ),
+        )
+    }
+
+    if (nodes.size >= maxGraphNodes || edges.size >= MAX_ALL_COMPOSE_TOPOLOGY_EDGES ||
+        candidateCallsResolved >= MAX_ALL_COMPOSE_CANDIDATE_CALLS
+    ) {
+        truncated = true
+    }
+    val sourceCount = nodes.values.count { it.id in admittedIds }
+    val navigationCount = nodes.keys.count { it.startsWith("compose-nav:") }
+    diagnostics += "Independent Compose scan: $sourceCount source declarations, $analyzedBodies bodies, " +
+        "$navigationCount navigation destinations and ${composeHosts.size} setContent hosts; " +
+        "${edges.size} static call edges ($candidateCallsResolved resolved candidates). " +
+        "Unconnected UI is retained."
+    if (truncated) diagnostics += "Compose scan reached its IDE safety budget; some call sites or " +
+        "source functions could be omitted. Select a Composable for focused inspection."
+    return FlowGraph(
+        rootLabel = "Project composables",
+        nodes = nodes.values.toList(),
+        edges = edges.toList(),
+        diagnostics = diagnostics,
+    )
+}

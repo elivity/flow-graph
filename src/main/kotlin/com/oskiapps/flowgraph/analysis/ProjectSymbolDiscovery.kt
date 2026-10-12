@@ -69,25 +69,27 @@ internal fun AnalysisApiFlowAnalyzer.analyzeAllProjectFlows(): FlowGraph = ReadA
     // one project-file discovery pass so large projects are not enumerated twice just to connect UI islands.
     val discovery = discoverProjectSymbols()
     val roots = discovery.flowProperties
-    if (roots.isEmpty()) {
-        return@compute FlowGraph(
-            rootLabel = "All project flows",
-            nodes = emptyList(),
-            edges = emptyList(),
-            diagnostics = listOf("No Kotlin Flow/StateFlow/SharedFlow/Compose State properties were found in project sources."),
-        )
-    }
-
-    val graph = buildGraph(
+    // State analysis and Compose analysis are independent. A project containing only
+    // @Composable screens is still a valid graph, and a screen does not need to collect a
+    // Flow to be included in the UI topology.
+    val flowGraph = buildGraph(
         roots = roots,
         rootLabel = "All project flows",
         maxAnalyzedProperties = MAX_ALL_ANALYZED_PROPERTIES,
         maxGraphNodes = MAX_ALL_GRAPH_NODES,
-        projectComposables = discovery.composables,
+        deferComposeExpansion = true,
         productionSourcesOnly = true,
         projectDiscoveryTruncated = discovery.inspectedPropertyLimitHit || discovery.composableLimitHit,
         excludedTestFiles = discovery.excludedTestFiles,
     )
+    val remainingNodeCapacity = (MAX_ALL_GRAPH_NODES - flowGraph.nodes.count { it.kind != NodeKind.COMPOSABLE })
+        .coerceAtLeast(0)
+    val composeGraph = analyzeProjectComposables(
+        composables = discovery.composables,
+        composeHosts = discovery.composeHosts,
+        maxGraphNodes = remainingNodeCapacity,
+    )
+    val graph = flowGraph.mergeIndependentComposeGraph(composeGraph)
     // Warm the expensive state-to-state projection while still on the background analysis job.
     // The default All flows view can then render immediately on the EDT instead of doing an
     // O(states × paths) traversal during Swing painting/layout.
@@ -103,9 +105,8 @@ internal fun AnalysisApiFlowAnalyzer.analyzeAllProjectFlows(): FlowGraph = ReadA
  *
  * Flow classification is the expensive part (K2), so it has its own hard inspection cap.
  * Compose-source discovery is annotation/PSI based and much cheaper, but is capped separately to
- * keep pathological/generated source trees bounded. `setContent` hosts are not materialized in
- * All Flows; named @Composable call relationships provide the useful production topology without
- * repeating framework host nodes throughout the graph.
+ * keep pathological/generated source trees bounded. Resolved production `setContent` host lambdas
+ * are retained as static UI entry points, even when they do not read Flow state.
  */
 
 
@@ -129,6 +130,7 @@ internal fun AnalysisApiFlowAnalyzer.discoverProjectSymbols(): ProjectDiscovery 
 
     val roots = mutableListOf<KtProperty>()
     val composables = mutableListOf<KtNamedFunction>()
+    val composeHosts = mutableListOf<KtCallExpression>()
     var propertiesInspected = 0
     var propertyLimitHit = false
     var composableLimitHit = false
@@ -153,6 +155,20 @@ internal fun AnalysisApiFlowAnalyzer.discoverProjectSymbols(): ProjectDiscovery 
 
         }
 
+        // A ComposeView/Activity setContent lambda is an entry point even when no
+        // enclosing source function is @Composable. Only resolved AndroidX hosts qualify.
+        if (composeHosts.size < MAX_PROJECT_COMPOSABLES_TO_DISCOVER) {
+            PsiTreeUtil.findChildrenOfType(ktFile, KtCallExpression::class.java)
+                .asSequence()
+                .filter { it.calleeExpression?.text == "setContent" }
+                .forEach { call ->
+                    ProgressManager.checkCanceled()
+                    if (composeHosts.size < MAX_PROJECT_COMPOSABLES_TO_DISCOVER &&
+                        FlowSemantics.isComposeSetContentCall(call)
+                    ) composeHosts += call
+                }
+        }
+
         if (!propertyLimitHit) {
             for (property in PsiTreeUtil.findChildrenOfType(ktFile, KtProperty::class.java)) {
                 ProgressManager.checkCanceled()
@@ -173,6 +189,7 @@ internal fun AnalysisApiFlowAnalyzer.discoverProjectSymbols(): ProjectDiscovery 
     return ProjectDiscovery(
         flowProperties = roots.distinctBy(::propertyId),
         composables = composables.distinctBy(::composeSourceId),
+        composeHosts = composeHosts.distinctBy { it.containingKtFile.virtualFile.path to it.textOffset },
         inspectedPropertyLimitHit = propertyLimitHit,
         composableLimitHit = composableLimitHit,
         excludedTestFiles = excludedTestFiles,
