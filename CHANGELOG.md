@@ -1,3 +1,10 @@
+## 0.20.7 — Quit and release plugin session resources
+
+- Add a Quit action that closes the Flow Graph tool window and releases Live sockets, transport workers, runtime history, cached graph layouts, Compose render images, and Swing timers.
+- Cancel in-flight project-wide analysis and ignore stale source-analysis completions after Quit.
+- Unregister listeners and drop the active panel so the stopped tool window retains only a lightweight Start Flow Graph launcher; opening a new graph from the editor also starts a new session.
+- Permit the Live server to restart with a fresh thread pool after shutdown.
+
 ## 0.20.6 — Client live-tracing permission documentation
 
 - Explain why the Android client needs `android.permission.INTERNET` for local TCP-based Live tracing, even without external Internet access.

@@ -11,7 +11,7 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
-**Current release: 0.20.6** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+**Current release: 0.20.7** · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
 
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
@@ -123,11 +123,11 @@ In the Android **application** module:
 // app/build.gradle.kts
 plugins {
     // your existing plugins...
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.6"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.6")
+    debugImplementation("com.github.elivity:flow-graph:0.20.7")
 }
 ```
 
@@ -138,7 +138,7 @@ If plugin versions are centralized at the root:
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.6" apply false
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7" apply false
 }
 ```
 
@@ -149,7 +149,7 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.6")
+    debugImplementation("com.github.elivity:flow-graph:0.20.7")
 }
 ```
 
@@ -247,6 +247,14 @@ From there you can:
 </p>
 
 > **GIF slot:** replace `docs/media/detail-flow.gif` with your real focused/detail-flow recording.
+
+### Quit and release resources
+
+Choose **Quit** in the Flow Graph toolbar to **stop the plugin's active session** rather than just hide its window. Quit disconnects the local TCP Live server and clients, shuts down its background worker pool, cancels active All Flows analysis, stops the timeline/zoom/UI refresh timers, unregisters listeners, and clears cached graphs, runtime history and Compose preview images.
+
+The tool window closes and leaves a lightweight **Start Flow Graph** launcher if you reopen it from **View → Tool Windows → Flow Graph**. You can also use **Show Flow Graph** on a source declaration to start a new session automatically. The next session starts with no previous graph or tracing history.
+
+Quit does **not** uninstall the IDE plugin, stop the Android app, remove its debug instrumentation, or uninstall the debug runtime. It also does not undo device-side `adb reverse` configuration; disconnect the device or use `adb reverse --remove tcp:50737` if you need to remove that mapping. Hiding the tool window without using Quit does not release the session resources.
 
 ### Live trace
 
@@ -410,7 +418,7 @@ Test the JitPack-style runtime publication locally:
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   -Pgroup=com.github.elivity \
   -Partifact=flow-graph \
-  -Pversion=0.20.6
+  -Pversion=0.20.7
 ```
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).
