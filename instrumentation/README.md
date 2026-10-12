@@ -1,34 +1,55 @@
-# Flow Graph runtime instrumentation
+# Flow Graph instrumentation and debug runtime
 
-The Android-side integration is split into a normal Gradle plugin plus a debug-only runtime.
+This repository builds two independently consumable JitPack modules from the same `0.20.8` Git tag:
+
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.8` — Gradle/AGP instrumentation plugin implementation (plugin ID `com.oskiapps.flowgraph.instrumentation`).
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8` — lightweight Java runtime used only in Android debug builds.
+
+The Android Studio IDE plugin is a separate artifact in this same repository.
 
 ## Consumer setup
 
-Add JitPack to dependency repositories in `settings.gradle.kts`:
-
 ```kotlin
+// settings.gradle.kts (in the Android app consuming Flow Graph)
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        maven("https://jitpack.io")
+    }
+    // JitPack publishes the plugin implementation, not a Gradle plugin marker.
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.oskiapps.flowgraph.instrumentation") {
+                useModule("com.github.elivity.flow-graph:flowgraph-gradle-plugin:${requested.version}")
+            }
+        }
+    }
+}
+
 dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
+        maven("https://jitpack.io")
     }
 }
 ```
 
-`app/build.gradle.kts`:
-
 ```kotlin
+// app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
 }
 
-dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.7")
-}
+// The plugin adds the matching flowgraph-runtime to debugImplementation automatically.
+// Do not add the old com.github.elivity:flow-graph dependency manually.
 ```
 
-Optional:
+The Gradle plugin automatically adds the version-matched runtime to the Android application's `debugImplementation` and instruments only debug variants. Do not add the runtime explicitly. Remove the old single-artifact runtime dependency when upgrading.
+
+Optional configuration:
 
 ```kotlin
 flowGraphInstrumentation {
@@ -37,12 +58,13 @@ flowGraphInstrumentation {
     traceSuspendingEmits.set(true)
     traceCompose.set(true)
     traceUiInteractions.set(true)
+    // addRuntimeDependency.set(false) // advanced use: manually manage the debug runtime
 }
 ```
 
-The Gradle plugin instruments only the Android `debug` variant. The runtime dependency should therefore also use `debugImplementation`.
+If you disable automatic runtime injection, you must explicitly add the matching JitPack runtime artifact yourself. For standard use, leave it enabled.
 
-Live tracing requires `android.permission.INTERNET` in the client app's merged Android manifest, because the debug runtime opens a TCP connection to the local trace server on `127.0.0.1:50737` (via `adb reverse`). If it is not already present, declare it under `app/src/debug/AndroidManifest.xml`:
+Live tracing needs `android.permission.INTERNET` in the inspected app's merged debug manifest because the runtime connects to the local trace endpoint `127.0.0.1:50737` over `adb reverse`:
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -50,9 +72,15 @@ Live tracing requires `android.permission.INTERNET` in the client app's merged A
 </manifest>
 ```
 
-This does not contact the public Internet, needs no runtime permission prompt, and does not apply to static analysis. Use the debug manifest to avoid introducing an otherwise unnecessary permission into release builds.
+Declare it under `app/src/debug/AndroidManifest.xml` if the app does not already have the permission. No external Internet connection or permission prompt is required. Static graph discovery works without the instrumentation plugin.
 
-## Published artifacts
+## Publication
 
-- Gradle plugin ID: `com.oskiapps.flowgraph.instrumentation` (Gradle Plugin Portal)
-- Runtime: `com.github.elivity:flow-graph:0.20.7` (JitPack)
+`jitpack.yml` publishes both `:flowgraph-runtime` and `:flowgraph-gradle-plugin` to the local Maven repository in a JitPack build. Gradle plugin ID resolution from JitPack needs the `pluginManagement.resolutionStrategy` above, unlike a Gradle Plugin Portal publication.
+
+To exercise publications locally:
+
+```bash
+gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal \
+  :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
+```

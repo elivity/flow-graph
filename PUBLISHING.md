@@ -1,116 +1,85 @@
-# Publishing Flow Graph
+# Publishing Flow Graph 0.20.8
 
-Flow Graph uses three standard distribution channels:
+The **single `elivity/flow-graph` Git repository** contains three release artifacts: an Android Studio IDE plugin, a Gradle instrumentation plugin, and the client runtime. The latter two are separate Maven modules and are versioned with the same Git tag.
 
-| Component | Public distribution |
-| --- | --- |
-| Android Studio IDE plugin | JetBrains Marketplace |
-| `com.oskiapps.flowgraph.instrumentation` | Gradle Plugin Portal |
-| debug runtime | JitPack from `elivity/flow-graph` |
+| Artifact | Publication | Coordinates / identifier |
+| --- | --- | --- |
+| IDE plugin | JetBrains Marketplace (or installable ZIP) | Flow Graph |
+| Gradle instrumentation | JitPack; optionally Gradle Plugin Portal | `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.8` |
+| Debug runtime | JitPack | `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8` |
 
-The repository is MIT licensed. JitPack removes the Maven Central namespace, signing, staging, and GPG-key work for the runtime. JitPack builds a tagged Git commit on demand and serves the artifact from its Maven repository.
+The plugin adds the runtime to `debugImplementation` automatically. Its packaged release metadata, not the consuming app's version, chooses the compatible runtime. Runtime code has no IntelliJ/Gradle compile-time dependencies.
 
-The instrumentation **Gradle plugin stays on the Gradle Plugin Portal intentionally**. A plugin resolved through the normal `plugins { id(...) version(...) }` DSL needs a plugin marker artifact under the plugin ID coordinates. JitPack serves GitHub builds under `com.github.<owner>...`; putting only the plugin implementation on JitPack would therefore require consumers to add a custom `pluginManagement.resolutionStrategy` mapping. Keeping the plugin on the Portal preserves the simple install syntax.
-
-## Consumer coordinates
-
-For release `0.20.7`:
-
-```kotlin
-plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
-}
-
-dependencies {
-    debugImplementation("com.github.elivity:flow-graph:0.20.7")
-}
-```
-
-The consumer also adds:
-
-```kotlin
-maven { url = uri("https://jitpack.io") }
-```
-
-to `dependencyResolutionManagement.repositories`.
-
-## Build checks
+## 1. Validate locally
 
 ```bash
 ./gradlew clean test buildPlugin
 ./gradlew -p instrumentation clean build
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
-  -Pgroup=com.github.elivity \
-  -Partifact=flow-graph \
-  -Pversion=0.20.7
+  :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```
 
-## 1. Runtime release on JitPack
+Expect local Maven publications under `~/.m2/repository/com/github/elivity/flow-graph/flowgraph-runtime/0.20.8/` and `.../flowgraph-gradle-plugin/0.20.8/`. Verify both JAR/POM pairs and their contents before tagging.
 
-There is no upload task and no JitPack credential. Push the source to:
+## 2. Release both modules to JitPack
 
-`https://github.com/elivity/flow-graph`
-
-Then create and push a tag matching the public version:
+Push code to `https://github.com/elivity/flow-graph`, then push a matching release tag:
 
 ```bash
-git tag 0.20.7
-git push origin 0.20.7
+git tag 0.20.8
+git push origin 0.20.8
 ```
 
-Open `https://jitpack.io/#elivity/flow-graph`, select `0.20.7`, and click **Get it** once if you want to force the first build immediately. Otherwise the first Gradle dependency request triggers it.
+Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.8` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
 
-`jitpack.yml` runs only the runtime publication and passes JitPack's `$GROUP`, `$ARTIFACT`, and `$VERSION` values into Gradle, so the produced artifact matches:
-
-`com.github.elivity:flow-graph:0.20.7`
-
-## 2. Publish the Gradle instrumentation plugin
-
-Create a Gradle Plugin Portal account/API key and expose the standard credentials:
-
-```bash
-export GRADLE_PUBLISH_KEY='...'
-export GRADLE_PUBLISH_SECRET='...'
-```
-
-Validate:
-
-```bash
-./gradlew -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
-```
-
-Publish:
-
-```bash
-./gradlew -p instrumentation :flowgraph-gradle-plugin:publishPlugins
-```
-
-This is what makes the normal consumer syntax work without custom plugin-resolution rules:
+The plugin's JitPack module contains its implementation and standard Gradle plugin descriptor, but normal Gradle `plugins {}` syntax resolves marker coordinates first. Set up `pluginManagement.resolutionStrategy` so Gradle resolves the plugin ID to the JitPack implementation module:
 
 ```kotlin
-plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.7"
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        maven("https://jitpack.io")
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.oskiapps.flowgraph.instrumentation") {
+                useModule("com.github.elivity.flow-graph:flowgraph-gradle-plugin:${requested.version}")
+            }
+        }
+    }
 }
 ```
 
-## 3. Publish the Android Studio plugin
+Also add `maven("https://jitpack.io")` to `dependencyResolutionManagement.repositories`, since the plugin injects a debug runtime dependency. Then the app needs only:
 
-Build it:
+```kotlin
+plugins {
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
+}
+```
+
+Remove the old explicit `debugImplementation("com.github.elivity:flow-graph:...")` line when upgrading.
+
+## 3. Optional Gradle Plugin Portal release
+
+For users who prefer no JitPack plugin mapping, you can also publish the same instrumentation plugin ID/version to the Gradle Plugin Portal:
+
+```bash
+./gradlew -p instrumentation :flowgraph-gradle-plugin:publishPlugins --validate-only
+# Supply GRADLE_PUBLISH_KEY and GRADLE_PUBLISH_SECRET:
+./gradlew -p instrumentation :flowgraph-gradle-plugin:publishPlugins
+```
+
+Plugin Portal consumers can omit the JitPack `resolutionStrategy`, **but must retain JitPack in normal dependency repositories** to resolve the automatically injected runtime. The Portal is a separate distribution channel from JetBrains Marketplace.
+
+## 4. IDE plugin release
 
 ```bash
 ./gradlew buildPlugin
 ```
 
-For the first JetBrains Marketplace release, upload the ZIP from `build/distributions/`. For later releases:
+For a first Marketplace release, upload the ZIP from `build/distributions/`; later releases can use `./gradlew publishPlugin -PintellijPlatformPublishingToken=...`.
 
-```bash
-./gradlew publishPlugin -PintellijPlatformPublishingToken='...'
-```
-
-## Release order
-
-For each version, use the same version everywhere. A practical order is:
-
-1. push the Git tag and verify the JitPack runtime build;
-2. publish `com.oskiapps.flowgraph.instrumentation` with the same version;
-3. publish the Marketplace plugin with the same version.
+**The ZIP and Git commits produced locally are not themselves a JitPack release.** Publication only occurs after pushing a matching tag and a successful remote JitPack build.
