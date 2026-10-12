@@ -11,7 +11,7 @@
   <img alt="Kotlin K2" src="https://img.shields.io/badge/Kotlin-K2-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
-**Source version: 0.20.8** (publication status must be verified separately) · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
+**Source version: 0.20.9** (publication status must be verified separately) · [Installation](docs/INSTALL.md) · [Publishing](PUBLISHING.md)
 
 Flow Graph is an Android Studio plugin for exploring **Kotlin `Flow`, `StateFlow`, `SharedFlow`, and Jetpack Compose state**.
 
@@ -92,7 +92,7 @@ Choose the setup for the features you need. **Static Flow/StateFlow and Compose 
 | Static Flow, StateFlow, SharedFlow and Compose hierarchy analysis | **IDE plugin only** |
 | Live tracing of a running debug app | **IDE plugin + Gradle instrumentation plugin + debug runtime** |
 
-The source tree is at **0.20.8**, but **a source version, Git tag, local ZIP, or JitPack badge is not proof that an installable release exists**. Before installing from a remote repository, verify that the corresponding version is actually available there. See [Publishing](PUBLISHING.md) for the release process.
+The source tree is at **0.20.9**, but **a source version, Git tag, local ZIP, or JitPack badge is not proof that an installable release exists**. Before installing from a remote repository, verify that the corresponding version is actually available there. See [Publishing](PUBLISHING.md) for the release process.
 
 ### A. Static analysis — IDE plugin only
 
@@ -102,16 +102,16 @@ The source tree is at **0.20.8**, but **a source version, Git tag, local ZIP, or
 2. In Android Studio, open **Settings → Plugins → ⚙ → Install Plugin from Disk…**.
 3. Select the plugin ZIP under `build/distributions/` and restart Android Studio if prompted.
 
-**JetBrains Marketplace (only after a release is published):** Use **Settings → Plugins → Marketplace**, search for **Flow Graph**, and install a compatible published version. Do not assume Marketplace has version `0.20.8` just because the source uses that version.
+**JetBrains Marketplace (only after a release is published):** Use **Settings → Plugins → Marketplace**, search for **Flow Graph**, and install a compatible published version. Do not assume Marketplace has version `0.20.9` just because the source uses that version.
 
 You can now use **Show Flow Graph** and **Load all flows** for static analysis, including independent production `@Composable` discovery. No JitPack repository, Gradle instrumentation plugin, runtime dependency, or `INTERNET` permission is required for this path.
 
 ### B. Live tracing — additional Android app setup
 
-The following steps are **only for Live runtime tracing**. They assume that the **`0.20.8` JitPack build has succeeded** for *both* artifacts:
+The following steps are **only for Live runtime tracing**. They assume that the **`0.20.9` JitPack build has succeeded** for *both* artifacts:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.8`
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8`
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.9`
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.9`
 
 Check the build and artifact availability at [JitPack — elivity/flow-graph](https://jitpack.io/#elivity/flow-graph) **before** using these coordinates. If they are not published yet, use the [local development fallback](#local-development-fallback-before-jitpack-publication) below instead.
 
@@ -153,7 +153,7 @@ The `resolutionStrategy` maps the instrumentation **plugin ID** to JitPack's **i
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.9"
 }
 ```
 
@@ -183,7 +183,7 @@ Enable **Live** in the Flow Graph tool window. Without the instrumentation plugi
 
 ### Local development fallback before JitPack publication
 
-If the `0.20.8` JitPack artifacts are not available yet, you can build and publish both modules to your **local Maven repository** from a Flow Graph source checkout:
+If the `0.20.9` JitPack artifacts are not available yet, you can build and publish both modules to your **local Maven repository** from a Flow Graph source checkout:
 
 ```bash
 ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
@@ -194,7 +194,9 @@ Then add **`mavenLocal()` before remote repositories** in both `pluginManagement
 
 ### Build compatibility and requirements
 
-The source currently configures **Android Studio 2025.3.4.7 / IntelliJ build 253** and **JDK 21** for building the IDE plugin; the repository's Gradle wrapper is **9.0.0**. The instrumentation plugin compiles against the **Android Gradle Plugin 9.3.2 API** with **JDK 17**, and `jitpack.yml` requests **Gradle 9.4.1** to build the Android-side modules. These are **project configuration values, not a guarantee that other Android Studio, AGP, Gradle, or JDK combinations have been tested**. Verify compatibility with your app's toolchain before relying on Live instrumentation.
+The IDE plugin is **compiled against Android Studio Panda 4 (2025.3.4.7 / IntelliJ build 253)** for backwards compatibility, with a declared compatibility range from **`253.32098` through `262.*`** (Rabbit 1 / 2026.2.1). CI also runs the IntelliJ Plugin Verifier against **Rabbit 1 2026.2.1.8**, but that does not replace a real Android Studio smoke test. **JDK 21** is used to build the IDE plugin; the repository's Gradle wrapper is **9.0.0**. The instrumentation plugin compiles against the **Android Gradle Plugin 9.3.2 API** with **JDK 17**, and `jitpack.yml` requests **Gradle 9.4.1** to build the Android-side modules. These are **project configuration values, not a guarantee that other Android Studio, AGP, Gradle, or JDK combinations have been tested**. Verify compatibility with your app's toolchain before relying on Live instrumentation.
+
+**Android Studio Rabbit 1 (2026.2.1):** Earlier Flow Graph builds with `untilBuild = "261.*"` are rejected during the IDE upgrade. Flow Graph `0.20.9` extends this limit to `262.*`. Build the new IDE plugin with `./gradlew buildPlugin`, then install the ZIP from `build/distributions/` via **Settings → Plugins → Install Plugin from Disk** before upgrading, or after the upgrade if necessary. This changes the **IDE plugin**, not the Recetas app or its Gradle dependencies. Check compatibility using `./gradlew test buildPlugin verifyPlugin`; CI verifies against Rabbit 1 stable `2026.2.1.8`, and manual UI testing remains important.
 
 For advanced options, see [instrumentation/README.md](instrumentation/README.md) and [the detailed installation guide](docs/INSTALL.md).
 
@@ -438,7 +440,7 @@ Test both JitPack module publications locally:
   :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```
 
-This checks local Maven artifacts; it does **not** publish to JitPack. Push the `0.20.8` tag to GitHub to make the release buildable there.
+This checks local Maven artifacts; it does **not** publish to JitPack. Push the `0.20.9` tag to GitHub to make the release buildable there.
 
 Release/publishing notes are in [PUBLISHING.md](PUBLISHING.md).
 

@@ -1,3 +1,9 @@
+## 0.20.9 — Android Studio Rabbit 1 compatibility
+
+- Expand the IDE plugin compatibility upper bound to IntelliJ Platform `262.*` (Android Studio Rabbit 1 / 2026.2.1), retaining the existing Panda 4 minimum build.
+- Configure IntelliJ Plugin Verifier to validate the packaged plugin against Rabbit 1 stable (`2026.2.1.8`) and run it in build/release CI.
+- Clarify how to verify the upgrade locally and distinguish IDE compatibility from Android runtime/JitPack publication.
+
 ## 0.20.8 — Shared JitPack release for instrumentation and runtime
 
 - Publish the instrumentation Gradle plugin and its debug runtime as two separate modules from one GitHub repository/tag.
