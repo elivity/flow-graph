@@ -13,6 +13,7 @@ internal fun GraphCanvas.drawConnectionPorts(
     producer: Rectangle,
     consumer: Rectangle,
     dimmed: Boolean,
+    renderZoom: Double = zoom,
 ) {
     // Sockets must share the exact geometry drawn and hit-tested for this visual
     // instance. Canonical Circuit routes can belong to another duplicated node.
@@ -40,7 +41,7 @@ internal fun GraphCanvas.drawConnectionPorts(
     graphics.color = Color(65, 38, 12, alpha)
     graphics.drawPolygon(xs, ys, 4)
 
-    if (zoom >= 0.85 && !dimmed) {
+    if (renderZoom >= 0.85 && !dimmed) {
         graphics.font = font.deriveFont(java.awt.Font.BOLD, 9f)
         graphics.color = Color(33, 202, 169)
         graphics.drawString("OUT", out.x + 8, out.y - 9)

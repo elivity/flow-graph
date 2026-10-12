@@ -29,7 +29,7 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import kotlin.math.max
 
-internal fun GraphCanvas.drawCircuitBackdrop(g: Graphics2D) {
+internal fun GraphCanvas.drawCircuitBackdrop(g: Graphics2D, renderZoom: Double = zoom) {
     val clip = g.clipBounds ?: Rectangle(0, 0, width, height)
     val dark = ((background ?: Color(45,45,45)).red + (background ?: Color(45,45,45)).green + (background ?: Color(45,45,45)).blue) / 3 < 140
     val major = if (dark) Color(0, 255, 190, 28) else Color(0, 110, 90, 24)
@@ -38,7 +38,7 @@ internal fun GraphCanvas.drawCircuitBackdrop(g: Graphics2D) {
     // The unclamped model-space grid explodes at very low zoom: thousands of lines and
     // millions of dots may otherwise be submitted for one 800x600 viewport.
     val spacing = adaptiveCircuitGridStep(
-        CIRCUIT_GRID_SPACING, zoom, maxOf(clip.width, clip.height)
+        CIRCUIT_GRID_SPACING, renderZoom, maxOf(clip.width, clip.height)
     )
     val oldStroke = g.stroke
     val majorStroke = BasicStroke(1.15f)
@@ -59,9 +59,9 @@ internal fun GraphCanvas.drawCircuitBackdrop(g: Graphics2D) {
 
     // The 3-unit dots are subpixel at overview scale. Skip their rasterization until
     // they are visible instead of filling the entire virtual canvas with invisible work.
-    if (zoom >= 0.5) {
+    if (renderZoom >= 0.5) {
         val dotsStep = adaptiveCircuitGridStep(
-            CIRCUIT_GRID_SPACING * 2, zoom, maxOf(clip.width, clip.height),
+            CIRCUIT_GRID_SPACING * 2, renderZoom, maxOf(clip.width, clip.height),
             minScreenPixels = 32.0, maxLines = 80,
         )
         g.color = dot
