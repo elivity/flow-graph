@@ -34,6 +34,13 @@ git push origin 0.20.11
 
 Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.11` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
 
+The JitPack build invokes the repository's `./gradlew` (currently Gradle 9.0.0),
+not a separately installed SDKMAN Gradle version. If it fails resolving a published
+Gradle plugin such as `org.jetbrains.kotlin.jvm`, inspect the `--info` log for
+repository/network failures before changing dependency versions. A failed JitPack
+build does not publish either artifact. Prefer a new release tag for retries after
+source changes rather than moving an existing public release tag.
+
 The plugin's JitPack module contains its implementation and standard Gradle plugin descriptor, but normal Gradle `plugins {}` syntax resolves marker coordinates first. Set up `pluginManagement.resolutionStrategy` so Gradle resolves the plugin ID to the JitPack implementation module:
 
 ```kotlin

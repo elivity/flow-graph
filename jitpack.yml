@@ -1,11 +1,8 @@
 jdk:
   - openjdk17
 
-before_install:
-  - sdk install gradle 9.4.1
-  - sdk use gradle 9.4.1
-
+# Use the pinned root Gradle wrapper rather than installing another Gradle version.
 # One Git tag publishes the plugin implementation AND its matching debug runtime.
 # Both modules install under com.github.elivity.flow-graph:<module>:<tag>.
 install:
-  - gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true --no-daemon --stacktrace
+  - ./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true --no-daemon --stacktrace --info

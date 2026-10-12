@@ -54,6 +54,18 @@ class ReleaseVersionConsistencyTest {
     }
 
     @Test
+    fun `jitpack uses repository wrapper to publish both modules`() {
+        val jitpack = Files.readString(Path.of("jitpack.yml"))
+        assertTrue("./gradlew -p instrumentation" in jitpack,
+            "JitPack should use the same pinned Gradle wrapper as the repository")
+        assertTrue(":flowgraph-runtime:publishToMavenLocal" in jitpack)
+        assertTrue(":flowgraph-gradle-plugin:publishToMavenLocal" in jitpack)
+        assertTrue("-PflowGraphJitPack=true" in jitpack)
+        assertFalse("sdk install gradle" in jitpack,
+            "JitPack should not install a separate Gradle version")
+    }
+
+    @Test
     fun `ci obtains version from root properties`() {
         for (filename in listOf(".github/workflows/build.yml", ".github/workflows/release.yml")) {
             val text = Files.readString(Path.of(filename))
