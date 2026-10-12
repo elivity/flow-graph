@@ -1,6 +1,7 @@
 package com.oskiapps.flowgraph.ui
 
 import com.oskiapps.flowgraph.model.FlowGraph
+import com.oskiapps.flowgraph.model.node
 import java.awt.Color
 import java.awt.Font
 import java.awt.Graphics2D
