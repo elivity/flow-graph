@@ -44,6 +44,7 @@ internal fun GraphCanvas.drawArrow(
     runtimeCount: Int,
     interCluster: Boolean,
     pathStyle: EdgePathStyle,
+    renderZoom: Double = zoom,
 ) {
     // Use actual visual bounds; canonical IDs can have multiple visual instances.
     // Cache by the current layout identity, not by model edge alone.
@@ -112,7 +113,7 @@ internal fun GraphCanvas.drawArrow(
         else -> null
     }
 
-    if (circuitViewEnabled && zoom >= 0.38 && pathStyle != EdgePathStyle.DIMMED) {
+    if (circuitViewEnabled && renderZoom >= 0.38 && pathStyle != EdgePathStyle.DIMMED) {
         val glowAlpha = if (pathStyle == EdgePathStyle.SEED) 88 else 56
         val glowStroke = BasicStroke(width + if (pathStyle == EdgePathStyle.SEED) 4.5f else 3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         g.color = withAlpha(baseColor, glowAlpha)
@@ -137,7 +138,7 @@ internal fun GraphCanvas.drawArrow(
 
     // A 9pt label at 20% zoom is unreadable. Avoid allocating its font/string and
     // rendering it hundreds of times during overview zoom or Live repaints.
-    val showEdgeLabel = zoom >= 0.42 && (
+    val showEdgeLabel = renderZoom >= 0.42 && (
         pathStyle in setOf(EdgePathStyle.SEED, EdgePathStyle.PATH) ||
             hasSelection || direct || runtimeCount > 0 ||
             (!interCluster && pathStyle != EdgePathStyle.DIMMED)

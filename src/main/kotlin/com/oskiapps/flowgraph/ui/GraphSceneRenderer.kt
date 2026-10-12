@@ -33,8 +33,10 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import kotlin.math.max
 
-internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateBounds: Boolean) {
-    if (circuitViewEnabled) drawCircuitBackdrop(g)
+internal fun GraphCanvas.drawGraphScene(
+    g: Graphics2D, model: FlowGraph, updateBounds: Boolean, renderZoom: Double = zoom,
+) {
+    if (circuitViewEnabled) drawCircuitBackdrop(g, renderZoom)
 
     val layout = cachedLayout ?: layoutNodes(model).also { cachedLayout = it }
     // drawArrow and edge hit-testing use nodeAvoidingRoute, not buildCircuitRouting.
@@ -157,7 +159,7 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
         }
         drawArrow(
             g, a, b, edge, direction, direct, directionDistance, selected != null,
-            runtimeCount, interCluster, pathStyle,
+            runtimeCount, interCluster, pathStyle, renderZoom,
         )
     }
     val searchActive = searchQuery.isNotBlank()
@@ -181,12 +183,12 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
                 // Match the selected-node causal-focus treatment: non-matching search results
                 // remain spatially visible, but look inactive rather than competing with hits.
                 nodeGraphics.composite = AlphaComposite.SrcOver.derive(0.22f)
-                drawNode(nodeGraphics, node, bounds)
+                drawNode(nodeGraphics, node, bounds, renderZoom)
             } finally {
                 nodeGraphics.dispose()
             }
         } else {
-            drawNode(g, node, bounds)
+            drawNode(g, node, bounds, renderZoom)
             if (edgeFocus != null && visualId in edgeFocus.nodes) {
                 val oldStroke = g.stroke
                 val isSeedEndpoint = visualId == edgeFocus.seed.fromVisualId || visualId == edgeFocus.seed.toVisualId
@@ -208,13 +210,13 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
     sceneEdges.forEach { visualEdge ->
         // Sockets smaller than one on-screen pixel are not legible. Keep them
         // on selected paths but skip the mass of invisible decoration at overview zoom.
-        if (zoom < 0.24 && visualEdge != edgeFocus?.seed &&
+        if (renderZoom < 0.24 && visualEdge != edgeFocus?.seed &&
             (edgeFocus == null || visualEdge !in edgeFocus.edges)) return@forEach
         val producer = layout.bounds[visualEdge.fromVisualId] ?: return@forEach
         val consumer = layout.bounds[visualEdge.toVisualId] ?: return@forEach
         if (!isVisible(producer) && !isVisible(consumer)) return@forEach
         val dimmed = edgeFocus != null && visualEdge !in edgeFocus.edges && visualEdge != edgeFocus.seed
-        drawConnectionPorts(g, visualEdge.source, producer, consumer, dimmed)
+        drawConnectionPorts(g, visualEdge.source, producer, consumer, dimmed, renderZoom)
     }
 }
 

@@ -86,12 +86,14 @@ internal fun GraphCanvas.drawMouseMagnifier(g: Graphics2D, model: FlowGraph) {
             scene.fillRect(inner.x, inner.y, inner.width, inner.height)
             val twoNodeLogicalWidth = (nodeW * 2 + (if (compactLayout) 86 else colGap)).toDouble()
             val twoNodeScale = inner.width.toDouble() / twoNodeLogicalWidth
-            val lensScale = maxOf(zoom, twoNodeScale) * 2.0
+            // A magnifier must render *as if* the scene is zoomed in: use an effective
+            // zoom of at least 100%, regardless of the main canvas zoom level.
+            val lensScale = magnifierRenderScale(zoom, twoNodeScale)
             scene.translate(inner.centerX, inner.centerY)
             scene.scale(lensScale, lensScale)
             scene.translate(-modelX, -modelY)
             scene.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            drawGraphScene(scene, model, updateBounds = false)
+            drawGraphScene(scene, model, updateBounds = false, renderZoom = lensScale)
         } finally {
             scene.dispose()
         }
@@ -113,7 +115,7 @@ internal fun GraphCanvas.drawMouseMagnifier(g: Graphics2D, model: FlowGraph) {
     g.stroke = BasicStroke(1.8f)
     g.drawRoundRect(lens.x, lens.y, lens.width, lens.height, 18, 18)
     g.font = font.deriveFont(Font.BOLD, 11f)
-    g.drawString("MAGNIFIER  •  2× stronger", lens.x + 12, lens.y + 18)
+    g.drawString("MAGNIFIER  •  enlarged detail", lens.x + 12, lens.y + 18)
 }
 
 
