@@ -1,9 +1,9 @@
 # Flow Graph instrumentation and debug runtime
 
-This repository builds two independently consumable JitPack modules from the same `0.20.8` Git tag:
+This repository builds two independently consumable JitPack modules from the same `0.20.9` Git tag:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.8` — Gradle/AGP instrumentation plugin implementation (plugin ID `com.oskiapps.flowgraph.instrumentation`).
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.8` — lightweight Java runtime used only in Android debug builds.
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.9` — Gradle/AGP instrumentation plugin implementation (plugin ID `com.oskiapps.flowgraph.instrumentation`).
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.9` — lightweight Java runtime used only in Android debug builds.
 
 The Android Studio IDE plugin is a separate artifact in this same repository.
 
@@ -40,7 +40,7 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.8"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.9"
 }
 
 // The plugin adds the matching flowgraph-runtime to debugImplementation automatically.
