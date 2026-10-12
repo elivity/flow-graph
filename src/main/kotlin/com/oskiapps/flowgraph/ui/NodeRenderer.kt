@@ -139,7 +139,7 @@ internal fun GraphCanvas.drawSourceIcon(g: Graphics2D, r: Rectangle) {
 
 
 
-internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle) {
+internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle, renderZoom: Double = zoom) {
     val overviewCompact = r.height <= PROJECT_OVERVIEW_NODE_H
     val color = when {
         isComposeStateNode(node) -> Color(55, 138, 145)
@@ -159,9 +159,10 @@ internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle) {
     }
     g.color = color
     fillNodeShape(g, node, r)
-    // Text, badges and tiny source icons are subpixel in a zoomed-out overview.
-    // Preserve node colors and meaningful focus/live/search outlines instead.
-    if (zoom < 0.32) {
+    // At small scales the full detail is unreadable. The main canvas paints readable
+    // device-pixel node names above this scene; a magnifier uses its own renderZoom
+    // and therefore paints the full node at a genuinely enlarged scale.
+    if (renderZoom < 0.32) {
         val oldStroke = g.stroke
         if (focusedVisualEdge == null && node.id == selectedId) {
             g.color = UIManager.getColor("Focus.color") ?: Color.WHITE
@@ -273,31 +274,34 @@ internal fun GraphCanvas.drawNode(g: Graphics2D, node: FlowNode, r: Rectangle) {
         g.stroke = oldStroke
     }
 
-    g.color = Color.WHITE
-    if (overviewCompact) {
-        // Overview geometry can be internally compacted to guarantee a complete fit at the
-        // hard 20% zoom. Scale text with the actual node box and never paint a second line
-        // outside the rectangle (older builds did exactly that for the 34px overview nodes).
-        val labelSize = (r.height * 0.34f).coerceIn(4.5f, 10f)
-        val inset = (r.height / 6).coerceAtLeast(2)
-        g.font = font.deriveFont(Font.BOLD, labelSize)
-        val maxChars = ((r.width - inset * 2) / (labelSize * 0.58f)).toInt().coerceAtLeast(3)
-        g.drawString(node.label.take(maxChars), r.x + inset, r.y + (r.height * 0.62).toInt())
-        if (r.height >= 42 && r.width >= 110) {
-            g.font = font.deriveFont(Font.PLAIN, (labelSize * 0.72f).coerceAtLeast(4f))
-            g.drawString(node.detail.take(maxChars), r.x + inset, r.y + r.height - 5)
+    // On the main canvas, names at these scales would be 2–8 device pixels.
+    // The readable screen-space name overlay replaces them; the magnifier uses
+    // renderZoom >= 1 and displays all text and node details as usual.
+    if (renderZoom >= MIN_READABLE_LABEL_ZOOM) {
+        g.color = Color.WHITE
+        if (overviewCompact) {
+            // Compact overview nodes retain their label within the node at normal zoom.
+            val labelSize = (r.height * 0.34f).coerceIn(4.5f, 10f)
+            val inset = (r.height / 6).coerceAtLeast(2)
+            g.font = font.deriveFont(Font.BOLD, labelSize)
+            val maxChars = ((r.width - inset * 2) / (labelSize * 0.58f)).toInt().coerceAtLeast(3)
+            g.drawString(node.label.take(maxChars), r.x + inset, r.y + (r.height * 0.62).toInt())
+            if (r.height >= 42 && r.width >= 110) {
+                g.font = font.deriveFont(Font.PLAIN, (labelSize * 0.72f).coerceAtLeast(4f))
+                g.drawString(node.detail.take(maxChars), r.x + inset, r.y + r.height - 5)
+            }
+        } else {
+            g.font = font.deriveFont(Font.BOLD, 13f)
+            val labelLimit = when {
+                node.kind == NodeKind.COMPOSABLE -> 18
+                isComposeStateNode(node) -> 24
+                else -> 33
+            }
+            val detailLimit = if (node.kind == NodeKind.COMPOSABLE) 24 else 54
+            g.drawString(node.label.take(labelLimit), r.x + 12, r.y + 26)
+            g.font = font.deriveFont(Font.PLAIN, 10f)
+            g.drawString(node.detail.take(detailLimit), r.x + 12, r.y + 51)
         }
-    } else {
-        g.font = font.deriveFont(Font.BOLD, 13f)
-        val labelLimit = when {
-            node.kind == NodeKind.COMPOSABLE -> 18
-            isComposeStateNode(node) -> 24
-            else -> 33
-        }
-        val detailLimit = if (node.kind == NodeKind.COMPOSABLE) 24 else 54
-        g.drawString(node.label.take(labelLimit), r.x + 12, r.y + 26)
-        g.font = font.deriveFont(Font.PLAIN, 10f)
-        g.drawString(node.detail.take(detailLimit), r.x + 12, r.y + 51)
     }
     if (node.source != null) drawSourceIcon(g, r)
 }
