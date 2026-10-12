@@ -35,24 +35,40 @@ internal fun GraphCanvas.drawCircuitBackdrop(g: Graphics2D) {
     val major = if (dark) Color(0, 255, 190, 28) else Color(0, 110, 90, 24)
     val minor = if (dark) Color(0, 255, 190, 12) else Color(0, 110, 90, 10)
     val dot = if (dark) Color(255, 205, 90, 42) else Color(160, 120, 20, 32)
-    val startX = (clip.x / CIRCUIT_GRID_SPACING) * CIRCUIT_GRID_SPACING
-    val startY = (clip.y / CIRCUIT_GRID_SPACING) * CIRCUIT_GRID_SPACING
+    // The unclamped model-space grid explodes at very low zoom: thousands of lines and
+    // millions of dots may otherwise be submitted for one 800x600 viewport.
+    val spacing = adaptiveCircuitGridStep(
+        CIRCUIT_GRID_SPACING, zoom, maxOf(clip.width, clip.height)
+    )
     val oldStroke = g.stroke
-    for (x in startX..(clip.x + clip.width + CIRCUIT_GRID_SPACING) step CIRCUIT_GRID_SPACING) {
-        g.color = if (((x / CIRCUIT_GRID_SPACING) % 4) == 0) major else minor
-        g.stroke = BasicStroke(if (((x / CIRCUIT_GRID_SPACING) % 4) == 0) 1.15f else 1f)
+    val majorStroke = BasicStroke(1.15f)
+    val minorStroke = BasicStroke(1f)
+    for (x in circuitGridPositions(clip.x, clip.width, spacing)) {
+        val isMajor = Math.floorDiv(x, spacing) % 4 == 0
+        g.color = if (isMajor) major else minor
+        g.stroke = if (isMajor) majorStroke else minorStroke
         g.drawLine(x, clip.y, x, clip.y + clip.height)
     }
-    for (y in startY..(clip.y + clip.height + CIRCUIT_GRID_SPACING) step CIRCUIT_GRID_SPACING) {
-        g.color = if (((y / CIRCUIT_GRID_SPACING) % 4) == 0) major else minor
-        g.stroke = BasicStroke(if (((y / CIRCUIT_GRID_SPACING) % 4) == 0) 1.15f else 1f)
+    for (y in circuitGridPositions(clip.y, clip.height, spacing)) {
+        val isMajor = Math.floorDiv(y, spacing) % 4 == 0
+        g.color = if (isMajor) major else minor
+        g.stroke = if (isMajor) majorStroke else minorStroke
         g.drawLine(clip.x, y, clip.x + clip.width, y)
     }
     g.stroke = oldStroke
-    for (x in startX..(clip.x + clip.width + CIRCUIT_GRID_SPACING) step CIRCUIT_GRID_SPACING * 2) {
-        for (y in startY..(clip.y + clip.height + CIRCUIT_GRID_SPACING) step CIRCUIT_GRID_SPACING * 2) {
-            g.color = dot
-            g.fillOval(x - 1, y - 1, 3, 3)
+
+    // The 3-unit dots are subpixel at overview scale. Skip their rasterization until
+    // they are visible instead of filling the entire virtual canvas with invisible work.
+    if (zoom >= 0.5) {
+        val dotsStep = adaptiveCircuitGridStep(
+            CIRCUIT_GRID_SPACING * 2, zoom, maxOf(clip.width, clip.height),
+            minScreenPixels = 32.0, maxLines = 80,
+        )
+        g.color = dot
+        for (x in circuitGridPositions(clip.x, clip.width, dotsStep)) {
+            for (y in circuitGridPositions(clip.y, clip.height, dotsStep)) {
+                g.fillOval(x - 1, y - 1, 3, 3)
+            }
         }
     }
 }
