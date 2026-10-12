@@ -28,6 +28,8 @@ jobs:
           VERSION="$(grep '^flowGraphVersion=' gradle.properties | cut -d= -f2-)"
           test "${GITHUB_REF_NAME}" = "${VERSION}"
       - run: gradle clean test buildPlugin
+      - name: Verify compatibility with Android Studio Rabbit 1
+        run: gradle verifyPlugin
       - run: gradle -p instrumentation clean build
       - name: Verify both JitPack publications
         shell: bash

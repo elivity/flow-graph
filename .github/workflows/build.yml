@@ -19,6 +19,8 @@ jobs:
           gradle-version: '9.4.1'
       - name: Build and test Android Studio plugin
         run: gradle clean test buildPlugin
+      - name: Verify compatibility with Android Studio Rabbit 1
+        run: gradle verifyPlugin
       - name: Build runtime and Gradle instrumentation plugin
         run: gradle -p instrumentation clean build
       - name: Verify both JitPack publications
