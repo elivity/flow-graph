@@ -283,6 +283,15 @@ class RuntimeTimelinePanel(
         return count
     }
 
+    /** Stop both Swing clocks even when the timeline is not attached to a Swing hierarchy. */
+    fun shutdown() {
+        repaintTimer.stop()
+        scrubDispatchTimer.stop()
+        clearHistory()
+        relevantRuntimeKeys = emptySet()
+        cachedActivityLayer = null
+    }
+
     override fun removeNotify() {
         repaintTimer.stop()
         scrubDispatchTimer.stop()

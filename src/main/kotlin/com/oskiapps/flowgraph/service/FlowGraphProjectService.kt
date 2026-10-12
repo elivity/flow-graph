@@ -27,6 +27,16 @@ class FlowGraphProjectService(private val project: Project) {
         private set
 
     private val listeners = CopyOnWriteArrayList<(FlowGraph) -> Unit>()
+    @Volatile private var sessionId: Long = 0
+
+    /** Invalidate results of analyses launched before Quit, including action completions. */
+    fun sessionId(): Long = sessionId
+
+    fun endSession() {
+        sessionId++
+        latestGraph = null
+        lastTargetsFile = null
+    }
 
     fun publish(graph: FlowGraph) {
         latestGraph = graph
@@ -37,6 +47,10 @@ class FlowGraphProjectService(private val project: Project) {
     fun addListener(listener: (FlowGraph) -> Unit) {
         listeners += listener
         latestGraph?.let(listener)
+    }
+
+    fun removeListener(listener: (FlowGraph) -> Unit) {
+        listeners -= listener
     }
 
     private fun exportRuntimeTargets(graph: FlowGraph) {

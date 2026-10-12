@@ -67,7 +67,22 @@ internal data class ClusterNavigationEntry(
     val label: String,
 )
 
-class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
+class FlowGraphPanel(
+    internal val project: Project,
+    private val onQuit: () -> Unit,
+) : JPanel(BorderLayout()) {
+    internal var isShutDown: Boolean = false
+        private set
+    internal var overviewFitTimer: Timer? = null
+    internal var detailFitTimer: Timer? = null
+    internal var currentUiTimer: Timer? = null
+    internal var analysisTask: java.util.concurrent.Future<*>? = null
+    internal val adbProcesses = ConcurrentHashMap.newKeySet<Process>()
+    internal val quitButton = JButton("Quit").apply {
+        toolTipText = "Stop Live tracing, cancel analysis, release graph memory and close Flow Graph"
+        margin = Insets(2, 8, 2, 8)
+    }
+
     internal val title = JLabel("Put the caret on a Flow/StateFlow/Compose State and choose Show Flow Graph")
     internal val hint = JLabel("Click a node to isolate its causal cone • wheel to zoom • drag to pan • click an edge to open its call site • Circuit view adds routed orthogonal traces")
     internal val showOperators = JCheckBox("Show operators").apply {
@@ -394,6 +409,7 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
     }
     internal val liveStatusListener: (LiveTraceStatus) -> Unit = { status ->
         SwingUtilities.invokeLater {
+            if (isShutDown) return@invokeLater
             // Status callbacks may reach the EDT out of order during rapid reconnects.
             liveTransportStatus = liveTraceService.status()
             updateLiveStatusIndicator(liveTransportStatus)
@@ -489,6 +505,7 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
         }
         extras.addActionListener { setExtrasVisible(extras.isSelected) }
         extrasClose.addActionListener { setExtrasVisible(false) }
+        quitButton.addActionListener { onQuit() }
 
         val actions = JPanel(WrapLayout(FlowLayout.LEFT, 6, 4)).apply {
             add(allFlows)
@@ -502,6 +519,7 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
             add(recentOnly)
             add(eventLens)
             add(extras)
+            add(quitButton)
         }
         val header = JPanel(BorderLayout(8, 4)).apply {
             border = BorderFactory.createEmptyBorder(0, 2, 8, 2)
@@ -845,6 +863,57 @@ class FlowGraphPanel(internal val project: Project) : JPanel(BorderLayout()) {
 
 
 
+
+    /** Called by the session host on Quit and when the project closes. Idempotent. */
+    internal fun shutdown() {
+        if (isShutDown) return
+        isShutDown = true
+        analysisTask?.cancel(true)
+        analysisTask = null
+        adbProcesses.forEach { it.destroyForcibly() }
+        adbProcesses.clear()
+        fitRequestGeneration++
+        autoFitGeneration++
+        overviewFitTimer?.stop()
+        overviewFitTimer = null
+        detailFitTimer?.stop()
+        detailFitTimer = null
+        currentUiTimer?.stop()
+        currentUiTimer = null
+        currentComposeRequestStartedAt = 0
+        historicalDetailsTimer.stop()
+        runtimeFlushTimer.stop()
+        composeAutoRefreshTimer.stop()
+        runtimeActivityCooldownTimer.stop()
+        canvas.cancelPendingWheelZoom()
+        runtimeTimeline.shutdown()
+        liveTraceService.removeListener(liveTraceListener)
+        liveTraceService.removeStatusListener(liveStatusListener)
+        liveTraceService.releaseResources()
+        composeRenderService.clear()
+        runtimeEventBuffer.clear()
+        runtimeOverlay = RuntimeOverlay.EMPTY
+        historicalRuntimeOverlay = null
+        recentRuntimeEmissionNanos.clear()
+        navigationHistory.clear()
+        pendingCurrentComposeCandidates = null
+        fullGraph = null
+        activeGraph = null
+        selectedNodeId = null
+        detailFocusNodeId = null
+        canvas.graph = null
+        canvas.runtimeOverlay = RuntimeOverlay.EMPTY
+        canvas.searchQuery = ""
+        canvas.obstacleRouteCache.clear()
+        canvas.obstacleRouteLayout = null
+        canvas.boundsById.clear()
+        canvas.clearFrozenLayout()
+        composePreviewCanvas.snapshot = null
+        details.text = ""
+        liveDiagnostics.text = ""
+        composePreviewDetails.text = ""
+        removeAll()
+    }
 
     internal companion object {
         const val MAX_DETAIL_ITEMS = 20

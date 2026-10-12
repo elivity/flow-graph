@@ -12,6 +12,7 @@ import java.util.Base64
 import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -42,8 +43,13 @@ class LiveTraceService : Disposable {
     private val recentEvents = ArrayDeque<RuntimeTraceEvent>()
     private val composeRenderResponses = java.util.concurrent.ConcurrentHashMap<String, RuntimeTraceEvent>()
     @Volatile private var currentComposeResponse: RuntimeTraceEvent? = null
-    private val executor = Executors.newCachedThreadPool { runnable ->
-        Thread(runnable, "FlowGraph-LiveTrace").apply { isDaemon = true }
+    @Volatile private var executor: ExecutorService? = null
+    private val executorLock = Any()
+
+    private fun workerPool(): ExecutorService = synchronized(executorLock) {
+        executor?.takeUnless { it.isShutdown } ?: Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "FlowGraph-LiveTrace").apply { isDaemon = true }
+        }.also { executor = it }
     }
 
     private val activeClients = AtomicInteger(0)
@@ -94,7 +100,8 @@ class LiveTraceService : Disposable {
         running.set(true)
         publishStatus()
 
-        executor.submit {
+        val workers = workerPool()
+        workers.submit {
             while (running.get() && sessionId.get() == session) {
                 try {
                     val client = socket.accept()
@@ -109,7 +116,7 @@ class LiveTraceService : Disposable {
                     lastError = null
                     publishStatus()
 
-                    executor.submit {
+                    workers.submit {
                         var commandWriter: BufferedWriter? = null
                         try {
                             client.use { connection ->
@@ -251,7 +258,21 @@ class LiveTraceService : Disposable {
         connectedSockets.clear()
         commandWriters.clear()
         activeClients.set(0)
+        synchronized(executorLock) {
+            executor?.shutdownNow()
+            executor = null
+        }
         publishStatus()
+    }
+
+    /** Release all retained trace data as well as sockets and worker threads on Quit. */
+    fun releaseResources() {
+        stop()
+        profilerEventFilter = null
+        recordingPaused.set(false)
+        clearRecentEvents()
+        lastClient = null
+        lastError = null
     }
 
 
@@ -338,7 +359,6 @@ class LiveTraceService : Disposable {
 
     override fun dispose() {
         stop()
-        executor.shutdownNow()
         listeners.clear()
         statusListeners.clear()
         commandWriters.clear()

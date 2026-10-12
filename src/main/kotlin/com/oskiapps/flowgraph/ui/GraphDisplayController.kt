@@ -40,6 +40,7 @@ internal fun FlowGraphPanel.updateAllFlowsStatus(label: String, color: Color) {
 
 
 internal fun FlowGraphPanel.analyzeAllFlows() {
+    if (isShutDown) return
     if (DumbService.isDumb(project)) {
         hint.text = "Wait until indexing finishes, then choose Load all flows again."
         updateAllFlowsStatus("Waiting", Color(230, 170, 55))
@@ -52,12 +53,15 @@ internal fun FlowGraphPanel.analyzeAllFlows() {
     title.text = "Scanning project Flow state + Compose topology…"
     hint.text = "Project-wide analysis runs in the background and can be cancelled by normal IDE write actions."
 
-    ReadAction.nonBlocking<FlowGraph> {
+    analysisTask?.cancel(true)
+    analysisTask = ReadAction.nonBlocking<FlowGraph> {
         AnalysisApiFlowAnalyzer(project).analyzeAllProjectFlows()
     }
         .inSmartMode(project)
         .expireWith(project)
+        .expireWhen { isShutDown }
         .finishOnUiThread(ModalityState.defaultModalityState()) { graph ->
+            if (isShutDown) return@finishOnUiThread
             allFlows.text = "Load all flows"
             allFlows.isEnabled = true
             updateAllFlowsStatus("Loaded", Color(65, 185, 110))
@@ -75,6 +79,7 @@ internal fun FlowGraphPanel.analyzeAllFlows() {
 
 
 internal fun FlowGraphPanel.setGraph(graph: FlowGraph) {
+    if (isShutDown) return
     fullGraph = graph
 
     // Global APK instrumentation can report framework flows and other screens that this graph
@@ -158,6 +163,10 @@ internal fun FlowGraphPanel.graphFitAction() {
 
 internal fun FlowGraphPanel.cancelPendingAutoFit() {
     autoFitGeneration++
+    overviewFitTimer?.stop()
+    overviewFitTimer = null
+    detailFitTimer?.stop()
+    detailFitTimer = null
 }
 
 /** A single deferred fit; user zoom/pan invalidates it immediately. */
@@ -165,6 +174,7 @@ internal fun FlowGraphPanel.cancelPendingAutoFit() {
 
 
 internal fun FlowGraphPanel.scheduleSettledAutoFit() {
+    overviewFitTimer?.stop()
     val generation = ++autoFitGeneration
     var previousExtent: Dimension? = null
     var stableSamples = 0
@@ -172,7 +182,7 @@ internal fun FlowGraphPanel.scheduleSettledAutoFit() {
     val timer = javax.swing.Timer(100, null)
     timer.initialDelay = 250
     timer.addActionListener {
-        if (generation != autoFitGeneration || selectionFocusActive) {
+        if (isShutDown || generation != autoFitGeneration || selectionFocusActive) {
             timer.stop()
             return@addActionListener
         }
@@ -193,6 +203,7 @@ internal fun FlowGraphPanel.scheduleSettledAutoFit() {
         }
         if (++attempts >= 30) timer.stop()
     }
+    overviewFitTimer = timer
     timer.start()
 }
 
@@ -204,6 +215,7 @@ internal fun FlowGraphPanel.scheduleSettledAutoFit() {
  * not schedule a fit. Manual zoom/pan invalidates the pending operation.
  */
 internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
+    detailFitTimer?.stop()
     val generation = ++autoFitGeneration
     var previousWidth = -1
     var previousHeight = -1
@@ -213,7 +225,7 @@ internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
     val timer = javax.swing.Timer(100, null)
     timer.initialDelay = 350
     timer.addActionListener {
-        if (generation != autoFitGeneration || !selectionFocusActive || !canvas.isShowing) {
+        if (isShutDown || generation != autoFitGeneration || !selectionFocusActive || !canvas.isShowing) {
             timer.stop()
             return@addActionListener
         }
@@ -245,6 +257,7 @@ internal fun FlowGraphPanel.scheduleDetailFitAfterLayout() {
         }
     }
     timer.isRepeats = true
+    detailFitTimer = timer
     timer.start()
 }
 
