@@ -37,8 +37,9 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
     if (circuitViewEnabled) drawCircuitBackdrop(g)
 
     val layout = cachedLayout ?: layoutNodes(model).also { cachedLayout = it }
-    val circuitRouting = if (circuitViewEnabled) buildCircuitRouting(model, layout.bounds) else null
-    circuitRoutingCache = circuitRouting
+    // drawArrow and edge hit-testing use nodeAvoidingRoute, not buildCircuitRouting.
+    // Rebuilding the old all-pairs candidate router on each paint was quadratic (or worse)
+    // in graph size and particularly painful during zoom and Live repaint bursts.
     if (updateBounds) {
         boundsById.clear()
         boundsById.putAll(layout.bounds)
@@ -205,6 +206,10 @@ internal fun GraphCanvas.drawGraphScene(g: Graphics2D, model: FlowGraph, updateB
     // Draw ports after nodes so that the entry/exit sockets remain legible even
     // where the edge terminates exactly at the filled node boundary.
     sceneEdges.forEach { visualEdge ->
+        // Sockets smaller than one on-screen pixel are not legible. Keep them
+        // on selected paths but skip the mass of invisible decoration at overview zoom.
+        if (zoom < 0.24 && visualEdge != edgeFocus?.seed &&
+            (edgeFocus == null || visualEdge !in edgeFocus.edges)) return@forEach
         val producer = layout.bounds[visualEdge.fromVisualId] ?: return@forEach
         val consumer = layout.bounds[visualEdge.toVisualId] ?: return@forEach
         if (!isVisible(producer) && !isVisible(consumer)) return@forEach
