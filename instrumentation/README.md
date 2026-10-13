@@ -1,13 +1,15 @@
 # Flow Graph instrumentation and debug runtime
 
-This repository builds two independently consumable JitPack modules from the same `0.20.13` Git tag:
+This repository builds two independently consumable JitPack modules from the same `0.20.14` Git tag:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.13` — Gradle/AGP instrumentation plugin implementation (plugin ID `com.oskiapps.flowgraph.instrumentation`).
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.13` — lightweight Java runtime used only in Android debug builds.
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.14` — Gradle/AGP instrumentation plugin implementation (plugin ID `com.oskiapps.flowgraph.instrumentation`).
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.14` — lightweight Java runtime used only in Android debug builds.
 
-The Android Studio IDE plugin is a separate artifact in this same repository.
+The Android Studio IDE plugin is a separate artifact in this same repository. The old manually copied Kotlin runtime helpers have been retired; use these published modules for Live tracing or install the IDE plugin alone for static analysis.
 
 ## Consumer setup
+
+These examples use `settings.gradle.kts` (Kotlin DSL). For `settings.gradle` (Groovy), use `maven { url 'https://jitpack.io' }` in both repositories blocks; the plugin ID and resolution strategy remain the same. Merge these declarations with any preexisting settings blocks.
 
 ```kotlin
 // settings.gradle.kts (in the Android app consuming Flow Graph)
@@ -40,7 +42,7 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.13"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.14"
 }
 
 // The plugin adds the matching flowgraph-runtime to debugImplementation automatically.
@@ -81,6 +83,6 @@ Declare it under `app/src/debug/AndroidManifest.xml` if the app does not already
 To exercise publications locally:
 
 ```bash
-gradle -p instrumentation :flowgraph-runtime:publishToMavenLocal \
+./gradlew -p instrumentation :flowgraph-runtime:publishToMavenLocal \
   :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```

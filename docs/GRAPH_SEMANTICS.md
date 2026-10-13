@@ -27,3 +27,9 @@ nodes overlapping a required port) can force a visible fallback route. Routed ed
 culled by their actual polyline bounds, not by a rectangle enclosing their endpoint nodes.
 
 These semantics and visual checks should be validated together in Android Studio and CI.
+
+## Expand possible versus Possible connections
+
+**Possible connections** is a structural visibility filter: disabling it removes inferred edges before building the graph and can remove possible-only intermediary nodes. **Expand possible** only affects the selected/focused causal cone while Possible connections is enabled. Disabled: preserve one-hop possible connections around the definite cone as context, without traversing through them. Enabled: also traverse possible edges up to the selected depth, **without removing any of the off-state nodes**. The same upstream/downstream depth limits still apply to traversal; context nodes can sit one hop past those limits.
+
+The presence of a possible edge is a statement about static uncertainty, **not** observed execution. Edge routing avoids unrelated nodes when a valid detour exists, but a visible fallback can still cross obstacles, and wires may cross each other in crowded layouts.

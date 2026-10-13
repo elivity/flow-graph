@@ -1,3 +1,12 @@
+# Changelog
+
+## 0.20.14 — Visibility defaults, possible-connection focus, and documentation cleanup
+
+- Default **View settings → Compose state** to unchecked. The independent **Compose views** discovery layer remains enabled by default.
+- Make **Expand possible** monotonic in focused graphs: expanding inferred dependencies preserves the entire definite cone and its one-hop possible context, including at finite causal-depth limits.
+- Remove unreferenced maintenance scripts, a one-off source-mutation script, both obsolete manual runtime-helper copies, and migration/repair snapshot notes. The supported Android runtime is `instrumentation/flowgraph-runtime`, automatically added to debug builds by `instrumentation/flowgraph-gradle-plugin`.
+- Refresh install, architecture, semantics, and publishing documentation to describe the current behavior and distribution paths. Historical release notes below remain as change history, not as current setup instructions.
+
 ## 0.20.13 — JitPack-only CI and Live shutdown test follow-up
 
 - Release the IDE plugin, Gradle instrumentation plugin, and Android debug runtime as version `0.20.13`.

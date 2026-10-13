@@ -1,6 +1,6 @@
-# Installation — Flow Graph 0.20.13
+# Installation — Flow Graph 0.20.14
 
-**Static analysis and Live tracing have different installation requirements.** This is the detailed companion to the [README installation section](../README.md#installation). Version `0.20.13` refers to the checked-out source; remote artifacts must be verified before installation.
+**Static analysis and Live tracing have different installation requirements.** This is the detailed companion to the [README installation section](../README.md#installation). Version `0.20.14` refers to the checked-out source; remote artifacts must be verified before installation.
 
 ## Static Flow/StateFlow and Compose analysis
 
@@ -20,10 +20,10 @@ The IDE plugin finds production `@Composable` functions independently of state/F
 
 Live tracing requires the IDE plugin **plus** two independently published artifacts from the same version:
 
-- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.13`
-- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.13`
+- `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.14`
+- `com.github.elivity.flow-graph:flowgraph-runtime:0.20.14`
 
-First confirm that the tagged `0.20.13` [JitPack build](https://jitpack.io/#elivity/flow-graph) succeeded. **A source ZIP or local Git tag does not publish these artifacts.** The Gradle plugin adds the runtime to `debugImplementation` automatically; the app must not add it manually.
+First confirm that the tagged `0.20.14` [JitPack build](https://jitpack.io/#elivity/flow-graph) succeeded. **A source ZIP or local Git tag does not publish these artifacts.** The Gradle plugin adds the runtime to `debugImplementation` automatically; the app must not add it manually.
 
 ### 1. Merge repository configuration into the existing app settings
 
@@ -58,12 +58,18 @@ dependencyResolutionManagement {
 
 The plugin-resolution mapping is for the JitPack implementation module; Gradle Plugin Portal consumers do not need it once the plugin is published there. JitPack remains necessary for the runtime unless it is published to another configured Maven repository.
 
+The examples above use Kotlin DSL (`settings.gradle.kts`). If your Android app has **`settings.gradle` (Groovy DSL)** instead, use `maven { url 'https://jitpack.io' }` inside both repository blocks, `rootProject.name = 'AppName'` and `include ':app'`. Do not paste Kotlin DSL `maven("https://jitpack.io")` into a Groovy settings file; it will fail with `Could not find method maven()`.
+
+**View settings defaults:** Compose state is off; Coroutine Flow/StateFlow and Compose views are on. **Expand possible** starts off. Turning it on adds recursive possible-connection traversal, but preserves the one-hop context already visible with it off. See [Architecture](ARCHITECTURE.md) and [Graph semantics](GRAPH_SEMANTICS.md).
+
+
+
 ### 2. Apply the plugin in the Android application module
 
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.13"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.14"
 }
 ```
 
@@ -102,7 +108,7 @@ Add `mavenLocal()` **before remote repositories** to both `pluginManagement.repo
 
 ## Compatibility information
 
-Configured build targets (not a guarantee of broad compatibility): **IDE plugin** — compiled against Android Studio Panda 4 `2025.3.4.7`, declared compatible through Rabbit 1 `2026.2.1` (IntelliJ build `262.*`), with Rabbit binary verification in CI, JDK 21, Gradle wrapper 9.0.0; **instrumentation plugin** — AGP API `9.3.2`, JDK 17; **JitPack instrumentation build** — Gradle 9.4.1. Verify your Android project's Gradle/AGP compatibility before enabling Live tracing.
+Configured build targets (not a guarantee of broad compatibility): **IDE plugin** — compiled against Android Studio Panda 4 `2025.3.4.7`, declared compatible through Rabbit 1 `2026.2.1` (IntelliJ build `262.*`), with Rabbit binary verification in CI, JDK 21, Gradle wrapper 9.0.0; **instrumentation plugin** — AGP API `9.3.2`, JDK 17; **JitPack instrumentation build** — pinned repository Gradle wrapper 9.0.0. Verify your Android project's Gradle/AGP compatibility before enabling Live tracing.
 
 See [instrumentation/README.md](../instrumentation/README.md) for advanced tracing options and [PUBLISHING.md](../PUBLISHING.md) for release steps.
 
@@ -117,4 +123,4 @@ Flow Graph `0.20.9` and later expand the IDE plugin's declared IntelliJ compatib
 
 The `verifyPlugin` task checks the packaged plugin against Android Studio `2026.2.1.8`. It may download the IDE and verifier on first use. Run a manual smoke test for the tool window, **Load all flows**, Compose discovery, node selection, and Live tracing after upgrading Android Studio.
 
-Older plugin builds with `untilBuild = "261.*"` remain incompatible with Rabbit at the metadata level: install the `0.20.13` IDE plugin ZIP or upgrade it from Marketplace once that release is published. The Android app's Gradle instrumentation and debug runtime remain separate artifacts.
+Older plugin builds with `untilBuild = "261.*"` remain incompatible with Rabbit at the metadata level: install the `0.20.14` IDE plugin ZIP or upgrade it from Marketplace once that release is published. The Android app's Gradle instrumentation and debug runtime remain separate artifacts.
