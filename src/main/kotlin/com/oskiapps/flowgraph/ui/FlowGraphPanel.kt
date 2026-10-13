@@ -94,7 +94,7 @@ class FlowGraphPanel(
     }
     internal val includePossible = JCheckBox("Expand possible").apply {
         isSelected = false
-        toolTipText = "Allow inferred/possible coupling to expand the focused causal cone. This only applies while Possible connections are visible."
+        toolTipText = "Traverse inferred/possible edges beyond the one-hop context in a focused graph. Never hides nodes already shown when off; requires Possible connections."
     }
     internal val circuitView = JCheckBox("Circuit").apply {
         isSelected = true
@@ -123,7 +123,7 @@ class FlowGraphPanel(
         foreground = UIManager.getColor("Label.disabledForeground") ?: Color.GRAY
     }
     internal val showComposeState = JCheckBox("Compose state").apply {
-        isSelected = true
+        isSelected = false
         toolTipText = "Show Jetpack Compose State / MutableState nodes in the project overview"
         isOpaque = false
     }

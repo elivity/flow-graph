@@ -445,6 +445,62 @@ class FlowGraphTest {
     }
 
     @Test
+    fun `expand possible never hides nodes from the unexpanded cone`() {
+        // At depth one, A -> B is certain, B -> C is possible context, and A -> D
+        // is a directly traversable possible edge. Previously enabling expansion
+        // included D but dropped C, making the expanded graph paradoxically smaller.
+        val graph = FlowGraph(
+            rootLabel = "A",
+            nodes = listOf("A", "B", "C", "D", "E")
+                .map { FlowNode(it, it, "", NodeKind.STATE, null) },
+            edges = listOf(
+                FlowEdge("A", "B", EdgeKind.PROPAGATES),
+                FlowEdge("B", "C", EdgeKind.PROPAGATES, confidence = CausalConfidence.POSSIBLE),
+                FlowEdge("A", "D", EdgeKind.PROPAGATES, confidence = CausalConfidence.POSSIBLE),
+                FlowEdge("D", "E", EdgeKind.PROPAGATES),
+            ),
+        )
+
+        val collapsed = graph.focusConnectionsDirectional("A", upstreamDepth = 1, downstreamDepth = 1)
+        val expanded = graph.focusConnectionsDirectional("A", upstreamDepth = 1, downstreamDepth = 1,
+            includePossible = true)
+        val collapsedIds = collapsed.nodes.mapTo(linkedSetOf()) { it.id }
+        val expandedIds = expanded.nodes.mapTo(linkedSetOf()) { it.id }
+
+        assertTrue(collapsedIds.all { it in expandedIds },
+            "Expand possible must never remove one-hop possible context: $collapsedIds vs $expandedIds")
+        assertTrue("C" in expandedIds)
+        assertTrue("D" in expandedIds)
+        assertTrue("E" !in expandedIds, "Depth one must still bound expanded traversal")
+    }
+
+    @Test
+    fun `expand possible always contains the definite cone across both directions`() {
+        val graph = FlowGraph(
+            rootLabel = "pivot",
+            nodes = listOf("source", "up-context", "pivot", "target", "down-context", "possible-child")
+                .map { FlowNode(it, it, "", NodeKind.STATE, null) },
+            edges = listOf(
+                FlowEdge("source", "pivot", EdgeKind.PROPAGATES),
+                FlowEdge("up-context", "source", EdgeKind.PROPAGATES,
+                    confidence = CausalConfidence.POSSIBLE),
+                FlowEdge("pivot", "target", EdgeKind.PROPAGATES),
+                FlowEdge("target", "down-context", EdgeKind.PROPAGATES,
+                    confidence = CausalConfidence.POSSIBLE),
+                FlowEdge("pivot", "possible-child", EdgeKind.PROPAGATES,
+                    confidence = CausalConfidence.POSSIBLE),
+            ),
+        )
+        for (depth in listOf(0, 1, 2, 3)) {
+            val regular = graph.focusConnectionsDirectional("pivot", depth, depth)
+            val expanded = graph.focusConnectionsDirectional("pivot", depth, depth,
+                includePossible = true)
+            assertTrue(regular.nodes.map { it.id }.all { id -> expanded.nodes.any { it.id == id } },
+                "Expand possible lost context at depth $depth")
+        }
+    }
+
+    @Test
     fun `depth limit keeps nearest causal noodle only`() {
         val graph = FlowGraph(
             rootLabel = "A",

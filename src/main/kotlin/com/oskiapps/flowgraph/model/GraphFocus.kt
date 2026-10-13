@@ -61,22 +61,19 @@ internal fun FlowGraph.focusConnectionsDirectional(
     includePossibleContext: Boolean = true,
 ): FlowGraph {
     val origin = nodes.firstOrNull { it.id == nodeId } ?: return this
+    // Always calculate the definite cone first. One-hop possible context belongs to this
+    // stable baseline, even when a user enables recursive possible traversal. Otherwise a
+    // depth-limited expanded cone can *lose* contextual nodes visible with the toggle off.
     val definiteKeep = linkedSetOf(nodeId)
-    definiteKeep += reachable(
-        startId = nodeId,
-        forward = false,
-        maxDepth = upstreamDepth,
-        includePossible = includePossible,
-    )
-    definiteKeep += reachable(
-        startId = nodeId,
-        forward = true,
-        maxDepth = downstreamDepth,
-        includePossible = includePossible,
-    )
+    definiteKeep += reachable(nodeId, forward = false, maxDepth = upstreamDepth, includePossible = false)
+    definiteKeep += reachable(nodeId, forward = true, maxDepth = downstreamDepth, includePossible = false)
 
     val keep = linkedSetOf<String>().apply { addAll(definiteKeep) }
-    if (!includePossible && includePossibleContext) {
+    if (includePossible) {
+        keep += reachable(nodeId, forward = false, maxDepth = upstreamDepth, includePossible = true)
+        keep += reachable(nodeId, forward = true, maxDepth = downstreamDepth, includePossible = true)
+    }
+    if (includePossibleContext) {
         edges.asSequence()
             .filter { it.isPossibleCoupling() }
             .filter { it.from in definiteKeep || it.to in definiteKeep }

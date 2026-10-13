@@ -26,6 +26,25 @@ class SourceOrganizationTest {
         ).all { it in names })
     }
 
+
+    @Test
+    fun `obsolete manual runtimes and maintenance scripts are not shipped`() {
+        val obsolete = listOf("legacy-runtime-helper", "runtime-helper", "scripts", "modify.py")
+        assertTrue(obsolete.none { Files.exists(Path.of(it)) },
+            "Remove obsolete manual tracing helpers and one-off migration scripts")
+    }
+
+    @Test
+    fun `compose state is off by default without hiding composable screens`() {
+        val panel = Files.readString(sourceRoot.resolve("com/oskiapps/flowgraph/ui/FlowGraphPanel.kt"))
+        val composeState = panel.substringAfter("internal val showComposeState = JCheckBox")
+            .substringBefore("internal val showCoroutineFlows")
+        val composeViews = panel.substringAfter("internal val showComposeViews = JCheckBox")
+            .substringBefore("internal val projectComposablesOnly")
+        assertTrue("isSelected = false" in composeState)
+        assertTrue("isSelected = true" in composeViews)
+    }
+
     private fun sourceFiles(): List<Path> = Files.walk(sourceRoot).use { walk ->
         walk.filter { Files.isRegularFile(it) && it.toString().endsWith(".kt") }
             .toList()
