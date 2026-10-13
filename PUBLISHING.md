@@ -1,12 +1,12 @@
-# Publishing Flow Graph 0.20.13
+# Publishing Flow Graph 0.20.14
 
 The **single `elivity/flow-graph` Git repository** contains three release artifacts: an Android Studio IDE plugin, a Gradle instrumentation plugin, and the client runtime. The latter two are separate Maven modules and are versioned with the same Git tag.
 
 | Artifact | Publication | Coordinates / identifier |
 | --- | --- | --- |
 | IDE plugin | JetBrains Marketplace (or installable ZIP) | Flow Graph |
-| Gradle instrumentation | JitPack; optionally Gradle Plugin Portal | `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.13` |
-| Debug runtime | JitPack | `com.github.elivity.flow-graph:flowgraph-runtime:0.20.13` |
+| Gradle instrumentation | JitPack; optionally Gradle Plugin Portal | `com.github.elivity.flow-graph:flowgraph-gradle-plugin:0.20.14` |
+| Debug runtime | JitPack | `com.github.elivity.flow-graph:flowgraph-runtime:0.20.14` |
 
 The plugin adds the runtime to `debugImplementation` automatically. Its packaged release metadata, not the consuming app's version, chooses the compatible runtime. Runtime code has no IntelliJ/Gradle compile-time dependencies.
 
@@ -21,18 +21,18 @@ The IDE plugin continues to compile against Panda 4, and now declares compatibil
   :flowgraph-gradle-plugin:publishToMavenLocal -PflowGraphJitPack=true
 ```
 
-Expect local Maven publications under `~/.m2/repository/com/github/elivity/flow-graph/flowgraph-runtime/0.20.13/` and `.../flowgraph-gradle-plugin/0.20.13/`. Verify both JAR/POM pairs and their contents before tagging.
+Expect local Maven publications under `~/.m2/repository/com/github/elivity/flow-graph/flowgraph-runtime/0.20.14/` and `.../flowgraph-gradle-plugin/0.20.14/`. Verify both JAR/POM pairs and their contents before tagging.
 
 ## 2. Release both modules to JitPack
 
 Push code to `https://github.com/elivity/flow-graph`, then push a matching release tag:
 
 ```bash
-git tag 0.20.13
-git push origin 0.20.13
+git tag 0.20.14
+git push origin 0.20.14
 ```
 
-Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.13` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
+Open `https://jitpack.io/#elivity/flow-graph` and request the `0.20.14` build. JitPack checks out the tag and executes `jitpack.yml`, publishing **both** Maven modules from one build. Do not assume the artifacts exist until JitPack reports a successful build.
 
 The JitPack build invokes the repository's `./gradlew` (currently Gradle 9.0.0),
 not a separately installed SDKMAN Gradle version. If it fails resolving a published
@@ -65,7 +65,7 @@ Also add `maven("https://jitpack.io")` to `dependencyResolutionManagement.reposi
 
 ```kotlin
 plugins {
-    id("com.oskiapps.flowgraph.instrumentation") version "0.20.13"
+    id("com.oskiapps.flowgraph.instrumentation") version "0.20.14"
 }
 ```
 
@@ -98,3 +98,9 @@ Plugin Portal consumers can omit the JitPack `resolutionStrategy`, **but must re
 For a first Marketplace release, upload the ZIP from `build/distributions/`; later releases can use `./gradlew publishPlugin -PintellijPlatformPublishingToken=...`.
 
 **The ZIP and Git commits produced locally are not themselves a JitPack release.** Publication only occurs after pushing a matching tag and a successful remote JitPack build.
+
+## CI and Beta publishing behavior
+
+GitHub Actions **build.yml** tests the IDE plugin and instrumentation modules and verifies local Maven publications without Gradle Plugin Portal credentials. **release.yml** also verifies those artifacts for a release tag; it then runs `publishPlugin` using the repository secret `JETBRAINS_MARKETPLACE_TOKEN`. If the secret is unset, not accepted, or the listing has not been initialized, that publishing job can fail **even when CI verification passed**, and the dependent GitHub Release job will not run. This is not a JitPack failure. First-time beta Marketplace submission can be done manually by uploading the IDE ZIP from `build/distributions/` and choosing the `beta` custom release channel; check the channel used by any subsequent automated releases before running `publishPlugin`.
+
+The Gradle plugin and Android runtime are **not** uploaded to JetBrains Marketplace and are **not** published by the GitHub Actions `publishToMavenLocal` checks. To make a version installable via JitPack, push a matching Git tag and verify the JitPack build of **both** modules succeeded. A version bump or successful plugin verifier check alone is not publication.

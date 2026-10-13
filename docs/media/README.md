@@ -5,7 +5,7 @@ The repository README is already wired to these two files:
 - `all-flows.gif` — project-wide **Load all flows** / overview recording.
 - `detail-flow.gif` — focused node / **Detail Flow** recording.
 
-The files currently included are obvious placeholders so the README renders cleanly before the final recordings are available.
+These GIF files are documentation media slots; replace them with verified recordings before using them as evidence of the current UI. The source implementation and application screenshots remain authoritative.
 
 To publish your real recordings, simply overwrite the two GIF files and keep the same names. No changes to the root `README.md` are required.
 
